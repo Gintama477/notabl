@@ -1,0 +1,914 @@
+{
+  "business": {
+    "name": "Brightview Family Dental",
+    "industry": "dental",
+    "city": "Austin",
+    "state": "TX",
+    "website": "https://www.brightviewfamilydental.example"
+  },
+  "generatedAt": "2026-08-14T01:36:53.794Z",
+  "note": "DEMO DATA — synthetic reviews generated for the Notabl prototype. Not real patient or business data.",
+  "reviewCount": 100,
+  "reviews": [
+    {
+      "id": "demo-review-37",
+      "authorName": "Brandon B.",
+      "rating": 5,
+      "reviewText": "The dentist explained every step of my procedure and it was painless.",
+      "reviewDate": "2026-06-19T14:09:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-59",
+      "authorName": "Megan P.",
+      "rating": 3,
+      "reviewText": "I was surprised by extra charges that weren't explained upfront.",
+      "reviewDate": "2026-06-19T15:22:00.000Z",
+      "primaryThemeHint": "billing",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-69",
+      "authorName": "Amanda H.",
+      "rating": 1,
+      "reviewText": "My appointment was delayed again, this is the third time in a row.",
+      "reviewDate": "2026-06-20T14:20:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-38",
+      "authorName": "Tom S.",
+      "rating": 5,
+      "reviewText": "My filling was quick and I barely felt a thing.",
+      "reviewDate": "2026-06-20T18:22:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-24",
+      "authorName": "Mark B.",
+      "rating": 5,
+      "reviewText": "Everything felt sanitized and well maintained.",
+      "reviewDate": "2026-06-21T13:56:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-25",
+      "authorName": "Sarah M.",
+      "rating": 5,
+      "reviewText": "Everything felt sanitized and well maintained.",
+      "reviewDate": "2026-06-22T18:47:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-2",
+      "authorName": "Angela B.",
+      "rating": 4,
+      "reviewText": "The front desk staff always remembers my name and asks about my family.",
+      "reviewDate": "2026-06-23T16:12:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-3",
+      "authorName": "Diane M.",
+      "rating": 5,
+      "reviewText": "Our hygienist was fantastic and so patient with my son.",
+      "reviewDate": "2026-06-23T18:04:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-1",
+      "authorName": "Rachel H.",
+      "rating": 5,
+      "reviewText": "The front desk staff always remembers my name and asks about my family.",
+      "reviewDate": "2026-06-24T15:03:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-50",
+      "authorName": "Chris R.",
+      "rating": 5,
+      "reviewText": "Very professional office from start to finish.",
+      "reviewDate": "2026-06-25T15:19:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-66",
+      "authorName": "Stephanie C.",
+      "rating": 3,
+      "reviewText": "Wish there was easier parking access, especially for the elderly.",
+      "reviewDate": "2026-06-27T13:34:00.000Z",
+      "primaryThemeHint": "parking_accessibility",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-26",
+      "authorName": "James P.",
+      "rating": 5,
+      "reviewText": "The clinic is always immaculate, you can tell they take hygiene seriously.",
+      "reviewDate": "2026-06-27T14:53:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-60",
+      "authorName": "Michael D.",
+      "rating": 3,
+      "reviewText": "Wish they were more upfront about costs before starting treatment.",
+      "reviewDate": "2026-06-27T16:50:00.000Z",
+      "primaryThemeHint": "billing",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-5",
+      "authorName": "Tom M.",
+      "rating": 5,
+      "reviewText": "Everyone from the receptionist to the dentist was genuinely kind.",
+      "reviewDate": "2026-06-29T17:12:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-70",
+      "authorName": "Christina H.",
+      "rating": 1,
+      "reviewText": "The scheduling seems to be falling behind lately, long waits every visit.",
+      "reviewDate": "2026-06-29T17:25:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-6",
+      "authorName": "Monica K.",
+      "rating": 5,
+      "reviewText": "The team here is incredibly warm and welcoming, even with my nervous kids.",
+      "reviewDate": "2026-06-29T20:29:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-39",
+      "authorName": "Nicole A.",
+      "rating": 5,
+      "reviewText": "The dentist walked me through my treatment plan clearly before starting.",
+      "reviewDate": "2026-06-29T20:52:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-4",
+      "authorName": "Monica B.",
+      "rating": 5,
+      "reviewText": "The front desk staff always remembers my name and asks about my family. The dentist walked me through my treatment plan clearly before starting.",
+      "reviewDate": "2026-07-01T14:38:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-51",
+      "authorName": "Monica M.",
+      "rating": 5,
+      "reviewText": "Very professional office from start to finish.",
+      "reviewDate": "2026-07-02T19:55:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-41",
+      "authorName": "Brandon P.",
+      "rating": 4,
+      "reviewText": "The dentist walked me through my treatment plan clearly before starting.",
+      "reviewDate": "2026-07-03T14:12:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-71",
+      "authorName": "Kelly S.",
+      "rating": 2,
+      "reviewText": "I waited over 45 minutes past my scheduled appointment time.",
+      "reviewDate": "2026-07-03T17:58:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-72",
+      "authorName": "Christina R.",
+      "rating": 1,
+      "reviewText": "Waited so long in the chair before anyone came in to see me.",
+      "reviewDate": "2026-07-04T14:06:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-8",
+      "authorName": "Monica A.",
+      "rating": 5,
+      "reviewText": "Every staff member greeted us with a smile the moment we walked in.",
+      "reviewDate": "2026-07-04T14:25:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-40",
+      "authorName": "Lisa T.",
+      "rating": 5,
+      "reviewText": "Best cleaning I've had in years, very thorough and gentle.",
+      "reviewDate": "2026-07-04T14:49:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-61",
+      "authorName": "Michael D.",
+      "rating": 3,
+      "reviewText": "Billing took weeks to sort out after my appointment. Wish there was easier parking access, especially for the elderly.",
+      "reviewDate": "2026-07-04T18:49:00.000Z",
+      "primaryThemeHint": "billing",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-7",
+      "authorName": "Amanda T.",
+      "rating": 5,
+      "reviewText": "Every staff member greeted us with a smile the moment we walked in.",
+      "reviewDate": "2026-07-06T18:17:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-52",
+      "authorName": "Kelly R.",
+      "rating": 5,
+      "reviewText": "I trust this practice completely with my family's care.",
+      "reviewDate": "2026-07-08T20:36:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-27",
+      "authorName": "Justin H.",
+      "rating": 5,
+      "reviewText": "I appreciated how clean and modern the facility looked. They clearly know what they're doing and it shows in every visit.",
+      "reviewDate": "2026-07-09T17:59:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-28",
+      "authorName": "Robert W.",
+      "rating": 5,
+      "reviewText": "Loved how bright and clean the whole office is.",
+      "reviewDate": "2026-07-09T20:43:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-29",
+      "authorName": "Brian L.",
+      "rating": 5,
+      "reviewText": "I appreciated how clean and modern the facility looked. My daughter's first cavity filling went smoothly thanks to how gentle they were.",
+      "reviewDate": "2026-07-11T18:02:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-73",
+      "authorName": "Rachel L.",
+      "rating": 1,
+      "reviewText": "I waited over 45 minutes past my scheduled appointment time.",
+      "reviewDate": "2026-07-12T20:15:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-11",
+      "authorName": "Chris D.",
+      "rating": 5,
+      "reviewText": "I love how friendly and personable the whole staff is here.",
+      "reviewDate": "2026-07-13T15:10:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-10",
+      "authorName": "Justin C.",
+      "rating": 5,
+      "reviewText": "The team here is incredibly warm and welcoming, even with my nervous kids.",
+      "reviewDate": "2026-07-13T16:35:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-43",
+      "authorName": "Daniel W.",
+      "rating": 4,
+      "reviewText": "The dentist walked me through my treatment plan clearly before starting. The office was spotless from the waiting room to the exam chairs.",
+      "reviewDate": "2026-07-13T18:26:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-74",
+      "authorName": "Greg B.",
+      "rating": 3,
+      "reviewText": "Waited so long in the chair before anyone came in to see me.",
+      "reviewDate": "2026-07-14T14:16:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-9",
+      "authorName": "Scott W.",
+      "rating": 5,
+      "reviewText": "I love how friendly and personable the whole staff is here. They clearly know what they're doing and it shows in every visit.",
+      "reviewDate": "2026-07-15T13:28:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-42",
+      "authorName": "Scott K.",
+      "rating": 5,
+      "reviewText": "The dentist explained every step of my procedure and it was painless. Loved how bright and clean the whole office is.",
+      "reviewDate": "2026-07-15T13:48:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-67",
+      "authorName": "Kevin D.",
+      "rating": 3,
+      "reviewText": "Parking near the office is very limited, had trouble finding a spot.",
+      "reviewDate": "2026-07-15T18:00:00.000Z",
+      "primaryThemeHint": "parking_accessibility",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-53",
+      "authorName": "Justin W.",
+      "rating": 5,
+      "reviewText": "Very professional office from start to finish.",
+      "reviewDate": "2026-07-16T17:31:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-13",
+      "authorName": "Nicole M.",
+      "rating": 5,
+      "reviewText": "Every staff member greeted us with a smile the moment we walked in.",
+      "reviewDate": "2026-07-17T20:11:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-62",
+      "authorName": "Emily W.",
+      "rating": 3,
+      "reviewText": "The billing statement was confusing and didn't match what I was quoted. It's nearly impossible to reach the office by phone to reschedule.",
+      "reviewDate": "2026-07-17T20:18:00.000Z",
+      "primaryThemeHint": "billing",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-76",
+      "authorName": "Sarah R.",
+      "rating": 3,
+      "reviewText": "I waited over 45 minutes past my scheduled appointment time. Wish there was easier parking access, especially for the elderly.",
+      "reviewDate": "2026-07-19T20:35:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-30",
+      "authorName": "Paul L.",
+      "rating": 5,
+      "reviewText": "The office was spotless from the waiting room to the exam chairs. They clearly know what they're doing and it shows in every visit.",
+      "reviewDate": "2026-07-20T14:48:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-77",
+      "authorName": "Emily H.",
+      "rating": 2,
+      "reviewText": "Waited so long in the chair before anyone came in to see me.",
+      "reviewDate": "2026-07-20T20:57:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-44",
+      "authorName": "Melissa H.",
+      "rating": 5,
+      "reviewText": "The dentist walked me through my treatment plan clearly before starting.",
+      "reviewDate": "2026-07-21T17:13:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-31",
+      "authorName": "Michael K.",
+      "rating": 5,
+      "reviewText": "I appreciated how clean and modern the facility looked.",
+      "reviewDate": "2026-07-22T13:10:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-75",
+      "authorName": "Rachel K.",
+      "rating": 2,
+      "reviewText": "My appointment was delayed again, this is the third time in a row. The lot was full and I had to park two blocks away.",
+      "reviewDate": "2026-07-22T13:14:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-12",
+      "authorName": "Rachel S.",
+      "rating": 5,
+      "reviewText": "Every staff member greeted us with a smile the moment we walked in.",
+      "reviewDate": "2026-07-22T14:21:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-54",
+      "authorName": "James B.",
+      "rating": 5,
+      "reviewText": "I trust this practice completely with my family's care.",
+      "reviewDate": "2026-07-22T19:28:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-16",
+      "authorName": "Angela W.",
+      "rating": 5,
+      "reviewText": "The team here is incredibly warm and welcoming, even with my nervous kids. I trust this practice completely with my family's care.",
+      "reviewDate": "2026-07-24T13:03:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-93",
+      "authorName": "Robert A.",
+      "rating": 1,
+      "reviewText": "Left two voicemails and never got a callback about my appointment.",
+      "reviewDate": "2026-07-24T15:28:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-78",
+      "authorName": "Andrew D.",
+      "rating": 2,
+      "reviewText": "My appointment was delayed again, this is the third time in a row.",
+      "reviewDate": "2026-07-24T19:52:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-46",
+      "authorName": "Greg P.",
+      "rating": 5,
+      "reviewText": "Best cleaning I've had in years, very thorough and gentle.",
+      "reviewDate": "2026-07-25T19:17:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-45",
+      "authorName": "Paul P.",
+      "rating": 5,
+      "reviewText": "My daughter's first cavity filling went smoothly thanks to how gentle they were.",
+      "reviewDate": "2026-07-26T14:44:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-81",
+      "authorName": "Justin T.",
+      "rating": 3,
+      "reviewText": "I waited over 45 minutes past my scheduled appointment time.",
+      "reviewDate": "2026-07-26T17:28:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-14",
+      "authorName": "Ryan R.",
+      "rating": 5,
+      "reviewText": "I love how friendly and personable the whole staff is here.",
+      "reviewDate": "2026-07-26T19:48:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-15",
+      "authorName": "Michael C.",
+      "rating": 5,
+      "reviewText": "The hygienist was so friendly and made me feel comfortable the whole visit.",
+      "reviewDate": "2026-07-26T20:56:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-79",
+      "authorName": "Tom W.",
+      "rating": 3,
+      "reviewText": "Front desk overbooked and we sat for 50 minutes past our slot.",
+      "reviewDate": "2026-07-28T13:48:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-32",
+      "authorName": "Eric P.",
+      "rating": 4,
+      "reviewText": "I appreciated how clean and modern the facility looked.",
+      "reviewDate": "2026-07-28T14:22:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-80",
+      "authorName": "Julie M.",
+      "rating": 2,
+      "reviewText": "I waited over 45 minutes past my scheduled appointment time. I called three times and no one picked up the phone.",
+      "reviewDate": "2026-07-28T19:31:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-55",
+      "authorName": "Julie M.",
+      "rating": 5,
+      "reviewText": "They clearly know what they're doing and it shows in every visit.",
+      "reviewDate": "2026-07-29T19:17:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-63",
+      "authorName": "David D.",
+      "rating": 3,
+      "reviewText": "The billing statement was confusing and didn't match what I was quoted. The lot was full and I had to park two blocks away.",
+      "reviewDate": "2026-07-29T20:52:00.000Z",
+      "primaryThemeHint": "billing",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-94",
+      "authorName": "Diane H.",
+      "rating": 2,
+      "reviewText": "I called three times and no one picked up the phone.",
+      "reviewDate": "2026-07-31T17:21:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-56",
+      "authorName": "Brian L.",
+      "rating": 5,
+      "reviewText": "The dentist is extremely professional and knowledgeable.",
+      "reviewDate": "2026-07-31T17:37:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-34",
+      "authorName": "Brian A.",
+      "rating": 5,
+      "reviewText": "Loved how bright and clean the whole office is.",
+      "reviewDate": "2026-07-31T17:47:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-86",
+      "authorName": "Monica D.",
+      "rating": 2,
+      "reviewText": "We had to wait almost an hour in the lobby before being seen.",
+      "reviewDate": "2026-07-31T18:17:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-95",
+      "authorName": "Sarah L.",
+      "rating": 2,
+      "reviewText": "Phone lines seem to always be busy or go to voicemail.",
+      "reviewDate": "2026-07-31T18:20:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-19",
+      "authorName": "David P.",
+      "rating": 5,
+      "reviewText": "The front desk staff always remembers my name and asks about my family. The dentist is extremely professional and knowledgeable.",
+      "reviewDate": "2026-08-01T15:06:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-47",
+      "authorName": "Laura H.",
+      "rating": 5,
+      "reviewText": "The dentist explained every step of my procedure and it was painless.",
+      "reviewDate": "2026-08-01T19:15:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-68",
+      "authorName": "Christina D.",
+      "rating": 3,
+      "reviewText": "Wish there was easier parking access, especially for the elderly.",
+      "reviewDate": "2026-08-02T15:05:00.000Z",
+      "primaryThemeHint": "parking_accessibility",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-83",
+      "authorName": "Stephanie H.",
+      "rating": 1,
+      "reviewText": "We had to wait almost an hour in the lobby before being seen. Parking near the office is very limited, had trouble finding a spot.",
+      "reviewDate": "2026-08-02T15:38:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-64",
+      "authorName": "Paul D.",
+      "rating": 2,
+      "reviewText": "Billing took weeks to sort out after my appointment.",
+      "reviewDate": "2026-08-03T13:18:00.000Z",
+      "primaryThemeHint": "billing",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-18",
+      "authorName": "Sarah W.",
+      "rating": 5,
+      "reviewText": "The hygienist was so friendly and made me feel comfortable the whole visit.",
+      "reviewDate": "2026-08-03T16:10:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-84",
+      "authorName": "Rachel H.",
+      "rating": 2,
+      "reviewText": "Waited so long in the chair before anyone came in to see me.",
+      "reviewDate": "2026-08-03T16:28:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-33",
+      "authorName": "Jason H.",
+      "rating": 5,
+      "reviewText": "I appreciated how clean and modern the facility looked.",
+      "reviewDate": "2026-08-04T15:41:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-17",
+      "authorName": "Ryan W.",
+      "rating": 5,
+      "reviewText": "Everyone from the receptionist to the dentist was genuinely kind. They made a root canal way less scary than I expected.",
+      "reviewDate": "2026-08-05T19:46:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-82",
+      "authorName": "Kelly A.",
+      "rating": 1,
+      "reviewText": "Front desk overbooked and we sat for 50 minutes past our slot.",
+      "reviewDate": "2026-08-06T13:52:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-85",
+      "authorName": "Christina S.",
+      "rating": 2,
+      "reviewText": "Waited so long in the chair before anyone came in to see me.",
+      "reviewDate": "2026-08-06T16:12:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-96",
+      "authorName": "Kevin P.",
+      "rating": 2,
+      "reviewText": "Tried calling all week and could never get through to a person.",
+      "reviewDate": "2026-08-06T17:49:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-91",
+      "authorName": "Paul D.",
+      "rating": 2,
+      "reviewText": "Front desk overbooked and we sat for 50 minutes past our slot.",
+      "reviewDate": "2026-08-07T19:50:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-90",
+      "authorName": "Brandon A.",
+      "rating": 3,
+      "reviewText": "My appointment was delayed again, this is the third time in a row.",
+      "reviewDate": "2026-08-08T15:43:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-65",
+      "authorName": "Mark R.",
+      "rating": 2,
+      "reviewText": "Billing took weeks to sort out after my appointment.",
+      "reviewDate": "2026-08-08T17:34:00.000Z",
+      "primaryThemeHint": "billing",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-98",
+      "authorName": "Paul W.",
+      "rating": 1,
+      "reviewText": "It's nearly impossible to reach the office by phone to reschedule.",
+      "reviewDate": "2026-08-08T18:12:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-99",
+      "authorName": "Mark A.",
+      "rating": 2,
+      "reviewText": "It's nearly impossible to reach the office by phone to reschedule.",
+      "reviewDate": "2026-08-08T18:27:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-35",
+      "authorName": "Daniel P.",
+      "rating": 4,
+      "reviewText": "The office was spotless from the waiting room to the exam chairs.",
+      "reviewDate": "2026-08-08T18:39:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-57",
+      "authorName": "Melissa W.",
+      "rating": 5,
+      "reviewText": "They clearly know what they're doing and it shows in every visit. Everything felt sanitized and well maintained.",
+      "reviewDate": "2026-08-08T19:17:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-23",
+      "authorName": "Justin L.",
+      "rating": 5,
+      "reviewText": "Our hygienist was fantastic and so patient with my son.",
+      "reviewDate": "2026-08-09T18:25:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-92",
+      "authorName": "Kevin K.",
+      "rating": 2,
+      "reviewText": "I waited over 45 minutes past my scheduled appointment time.",
+      "reviewDate": "2026-08-10T14:07:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-36",
+      "authorName": "Michael D.",
+      "rating": 5,
+      "reviewText": "Loved how bright and clean the whole office is.",
+      "reviewDate": "2026-08-10T16:07:00.000Z",
+      "primaryThemeHint": "cleanliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-88",
+      "authorName": "Diane D.",
+      "rating": 2,
+      "reviewText": "We had to wait almost an hour in the lobby before being seen. I called three times and no one picked up the phone.",
+      "reviewDate": "2026-08-10T17:08:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-100",
+      "authorName": "Diane C.",
+      "rating": 2,
+      "reviewText": "Left two voicemails and never got a callback about my appointment.",
+      "reviewDate": "2026-08-10T17:50:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-48",
+      "authorName": "Emily S.",
+      "rating": 4,
+      "reviewText": "The dentist explained every step of my procedure and it was painless.",
+      "reviewDate": "2026-08-10T20:35:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-22",
+      "authorName": "Michael A.",
+      "rating": 5,
+      "reviewText": "Our hygienist was fantastic and so patient with my son. They made a root canal way less scary than I expected.",
+      "reviewDate": "2026-08-11T19:12:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-21",
+      "authorName": "Scott M.",
+      "rating": 5,
+      "reviewText": "Everyone from the receptionist to the dentist was genuinely kind.",
+      "reviewDate": "2026-08-11T20:49:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-58",
+      "authorName": "David K.",
+      "rating": 5,
+      "reviewText": "Very professional office from start to finish.",
+      "reviewDate": "2026-08-11T20:54:00.000Z",
+      "primaryThemeHint": "professionalism",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-49",
+      "authorName": "Jason L.",
+      "rating": 5,
+      "reviewText": "My filling was quick and I barely felt a thing.",
+      "reviewDate": "2026-08-12T15:21:00.000Z",
+      "primaryThemeHint": "treatment_experience",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-97",
+      "authorName": "Greg T.",
+      "rating": 1,
+      "reviewText": "Left two voicemails and never got a callback about my appointment.",
+      "reviewDate": "2026-08-12T17:25:00.000Z",
+      "primaryThemeHint": "communication",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-20",
+      "authorName": "Angela B.",
+      "rating": 5,
+      "reviewText": "The team here is incredibly warm and welcoming, even with my nervous kids.",
+      "reviewDate": "2026-08-12T20:41:00.000Z",
+      "primaryThemeHint": "staff_friendliness",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-87",
+      "authorName": "Emily A.",
+      "rating": 3,
+      "reviewText": "The scheduling seems to be falling behind lately, long waits every visit.",
+      "reviewDate": "2026-08-13T14:21:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    },
+    {
+      "id": "demo-review-89",
+      "authorName": "Diane B.",
+      "rating": 2,
+      "reviewText": "My appointment was delayed again, this is the third time in a row. I called three times and no one picked up the phone.",
+      "reviewDate": "2026-08-13T16:37:00.000Z",
+      "primaryThemeHint": "scheduling",
+      "isDemoData": true
+    }
+  ]
+}
