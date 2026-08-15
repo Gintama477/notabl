@@ -6,8 +6,25 @@ import { track } from "@/lib/analytics/track";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { sendWelcomeEmail } from "@/lib/email/send";
 import { logAutomationError } from "@/lib/monitoring/logError";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  // 5 signups per 30 minutes per IP — generous for a real user (who signs up
+  // once) while stopping a scripted client from flooding the pipeline that
+  // creates a demo business + runs analysis on every call. See
+  // lib/rateLimit.ts for why this is in-memory rather than distributed.
+  const ip = getClientIp(req);
+  const rateLimit = checkRateLimit(`signup:${ip}`, 5, 30 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many signup attempts. Please try again later." },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+      }
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const parsed = SignupSchema.safeParse(body);
   if (!parsed.success) {
