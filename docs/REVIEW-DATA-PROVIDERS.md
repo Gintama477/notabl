@@ -1,12 +1,45 @@
 # Review Data Sources (point 19)
 
-Notabl currently analyzes exactly two kinds of review data: the bundled
-demo dataset, and reviews manually imported by hand. There is no live
-connector to Google, Yelp, Facebook, Healthgrades, or any other review
-platform, and none will be added by scraping — only through an authorized
-API or a licensed data provider. This is a hard constraint, not a
-prioritization choice; see the Terms of Service ("Acceptable Use") and
-`docs/SECURITY-AUDIT.md` ("Confirmed: no unauthorized scraping anywhere").
+Notabl analyzes three kinds of review data today: the bundled demo
+dataset, reviews manually imported by hand, and — as of August 2026 — real
+Google reviews pulled via a third-party data provider (Outscraper). That
+third kind is a deliberate, temporary, risk-accepted exception to the
+original hard rule below, made knowingly by the business owner. Read this
+whole section before touching `lib/reviews/outscraperProvider.ts`.
+
+## The original rule, and the exception to it
+
+The original constraint was: no live connector added by scraping — only
+through an authorized API or a licensed data provider — see the Terms of
+Service ("Acceptable Use") and `docs/SECURITY-AUDIT.md` ("Confirmed: no
+unauthorized scraping anywhere"). That rule still stands as the target
+state.
+
+The exception: while the official Google Business Profile API application
+is pending (see the "Google Business Profile API" section of
+`docs/CREDENTIALS-NEEDED.md` for why that's slow — a 60+ day account-tenure
+prerequisite plus a multi-week manual review), Notabl is temporarily
+importing real reviews via Outscraper, a third-party provider that
+collects public Google Maps data rather than using Google's own licensed
+API. This is legally murkier than the rest of this product's data
+sourcing: Google actively sued a comparable provider (SerpApi) in December
+2025 over this exact practice, under DMCA anti-circumvention claims — see
+the research trail in the chat history around August 2026 for the specific
+findings. The business owner was shown this finding directly and chose to
+accept the risk short-term, specifically to have real data for early
+pilot customers, with an explicit plan to move to the properly licensed
+Google Business Profile API (or Yelp's paid, fully-licensed API) once
+either is in reach. This was not an oversight — flag it prominently if
+asked to review this codebase for compliance, and don't quietly "fix" it
+by ripping it out without checking with the business owner first, since
+it's a live, load-bearing part of getting real customers today.
+
+**If you're reading this months later and revenue now supports the
+official APIs: retire `lib/reviews/outscraperProvider.ts`, swap the
+registration in `lib/reviews/provider.ts`'s `getReviewDataProvider()` for
+a real `GoogleBusinessProfileProvider` (or a Yelp equivalent), and delete
+this whole "exception" section — nothing downstream needs to change, since
+both implement the same `ReviewDataProvider` interface.**
 
 ## The abstraction
 
@@ -21,6 +54,13 @@ real connector later never touches `lib/analysis/runAnalysis.ts` or
 
 ## What exists today
 
+- **`google`** (`OutscraperReviewProvider`) — see the exception explained
+  above. Connected per-business via the admin dashboard's "Connect Real
+  Google Reviews" form (`components/admin/PilotManagement.tsx` →
+  `ConnectGoogleReviewsForm`, `app/api/admin/reviews/connect-google`), which
+  takes a business and its Google Place ID. Safe to re-run to pick up new
+  reviews since the last sync — duplicates are skipped the same way as
+  every other source. Requires `OUTSCRAPER_API_KEY`.
 - **`demo`** (`DemoReviewProvider`) — the bundled synthetic dataset
   (`data/demo-reviews/dental-demo-reviews.json`). Every signup gets this
   same dataset today; see the demo-data banners throughout the app
