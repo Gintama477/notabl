@@ -98,6 +98,85 @@ export function PilotInviteForm() {
   );
 }
 
+export type ConnectableBusiness = { id: string; name: string };
+
+/**
+ * Connects a practice's real Google reviews via the temporary
+ * Outscraper-backed provider (see docs/REVIEW-DATA-PROVIDERS.md) — paste in
+ * a business and its Google Place ID, and their dashboard switches from
+ * demo data to their own real reviews within moments. Safe to run again
+ * later on the same business to pick up new reviews since the last sync.
+ */
+export function ConnectGoogleReviewsForm({ businesses }: { businesses: ConnectableBusiness[] }) {
+  const router = useRouter();
+  const [businessId, setBusinessId] = useState("");
+  const [placeId, setPlaceId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/reviews/connect-google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, placeId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult({ ok: false, message: data.error?.formErrors?.[0] || data.error || "Connection failed." });
+      } else {
+        setResult({ ok: true, message: `Imported ${data.imported} new review(s), skipped ${data.skipped} already-synced.` });
+        setPlaceId("");
+        router.refresh();
+      }
+    } catch {
+      setResult({ ok: false, message: "Connection failed. Please try again." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+      <select
+        value={businessId}
+        onChange={(e) => setBusinessId(e.target.value)}
+        required
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-1"
+      >
+        <option value="">Select a business…</option>
+        {businesses.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+      <input
+        value={placeId}
+        onChange={(e) => setPlaceId(e.target.value)}
+        placeholder="Google Place ID (e.g. ChIJ…)"
+        required
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
+      />
+      <button
+        type="submit"
+        disabled={submitting}
+        className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60 sm:col-span-1"
+      >
+        {submitting ? "Connecting…" : "Connect Google Reviews"}
+      </button>
+      {result && (
+        <div className={`sm:col-span-4 text-xs ${result.ok ? "text-teal-800" : "text-red-700"}`}>
+          <p>{result.message}</p>
+        </div>
+      )}
+    </form>
+  );
+}
+
 export function PilotToggleTable({ rows }: { rows: PilotRow[] }) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
