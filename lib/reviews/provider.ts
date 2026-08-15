@@ -1,3 +1,5 @@
+import { OutscraperReviewProvider } from "@/lib/reviews/outscraperProvider";
+
 // Review-data source abstraction (point 19). Mirrors the same pluggable-
 // provider pattern already used for AI (lib/ai/provider.ts), email
 // (lib/email/send.ts), and billing (lib/billing/provider.ts) — one
@@ -106,6 +108,7 @@ class ManualReviewProvider implements ReviewDataProvider {
 // ---------------------------------------------------------------------------
 
 let cachedProvider: ReviewDataProvider | null = null;
+let cachedGoogleProvider: ReviewDataProvider | null = null;
 
 export function getReviewDataProvider(sourceType: string = "demo"): ReviewDataProvider {
   if (sourceType === "demo") {
@@ -114,6 +117,20 @@ export function getReviewDataProvider(sourceType: string = "demo"): ReviewDataPr
   }
   if (sourceType === "manual") {
     return new ManualReviewProvider();
+  }
+  if (sourceType === "google") {
+    // TEMPORARY: backed by Outscraper (a third-party data provider), not
+    // Google's own official Business Profile API — a deliberate,
+    // risk-accepted stopgap while that application is pending. See the
+    // large comment at the top of lib/reviews/outscraperProvider.ts and
+    // docs/REVIEW-DATA-PROVIDERS.md before touching this. Swap the class
+    // instantiated here for a real GoogleBusinessProfileProvider once
+    // approved — the "google" sourceType and everything downstream stays
+    // the same.
+    if (!cachedGoogleProvider) {
+      cachedGoogleProvider = new OutscraperReviewProvider();
+    }
+    return cachedGoogleProvider;
   }
   throw new Error(
     `No review data provider is implemented for source type "${sourceType}" yet. See the "Building a real ` +
