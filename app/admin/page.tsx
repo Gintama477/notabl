@@ -1,7 +1,7 @@
 import { getAdminOverview } from "@/lib/db/queries";
 import { formatPrice } from "@/config/pricing";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
-import { PilotInviteForm, PilotToggleTable, PilotRow } from "@/components/admin/PilotManagement";
+import { PilotInviteForm, PilotToggleTable, PilotRow, ConnectGoogleReviewsForm } from "@/components/admin/PilotManagement";
 
 // Intentionally minimal per the development rule ("do NOT overbuild the
 // admin dashboard") — raw numbers, no charts library, no pagination.
@@ -101,6 +101,17 @@ export default async function AdminPage({
               new Date(b.createdAt).toLocaleDateString(),
             ])}
           />
+        </Section>
+
+        <Section title="Connect Real Google Reviews">
+          <div className="p-4">
+            <p className="mb-3 text-sm text-slate-600">
+              Temporary stopgap while the official Google Business Profile API application is pending — see
+              docs/REVIEW-DATA-PROVIDERS.md. Paste a business&apos;s Google Place ID to pull their real reviews in;
+              safe to re-run later to pick up new ones.
+            </p>
+            <ConnectGoogleReviewsForm businesses={data.businesses.map((b) => ({ id: b.id, name: b.name }))} />
+          </div>
         </Section>
 
         <Section title="Pilot Access">
