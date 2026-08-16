@@ -35,7 +35,7 @@ export default async function DashboardPage() {
   return (
     <>
       <Header />
-      <DemoDataBanner />
+      {data.hasDemoData && <DemoDataBanner />}
       <main className="flex-1 bg-slate-50 py-10">
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">

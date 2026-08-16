@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { getSessionAccountId } from "@/lib/auth/session";
-import { getBusinessForAccount, getWeeklyReportById, getSampleReviewsForRun } from "@/lib/db/queries";
+import { getBusinessForAccount, getWeeklyReportById, getSampleReviewsForRun, getDashboardData } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { DemoDataBanner } from "@/components/dashboard/DemoDataBanner";
@@ -19,11 +19,12 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
   if (!report || report.businessId !== business.id) notFound();
 
   const sampleReviews = await getSampleReviewsForRun(business.id, report.periodStart, report.periodEnd);
+  const { hasDemoData } = await getDashboardData(business.id);
 
   return (
     <>
       <Header />
-      <DemoDataBanner />
+      {hasDemoData && <DemoDataBanner />}
       <WeeklyReportView businessId={business.id} />
       <main className="flex-1 bg-slate-50 py-10">
         <div className="mx-auto max-w-3xl px-6">

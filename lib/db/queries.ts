@@ -144,6 +144,8 @@ export async function connectGoogleReviewSource(businessId: string, businessName
     .where(and(eq(reviewSources.businessId, businessId), eq(reviewSources.sourceType, "google")))
     .limit(1);
 
+  const isFirstConnect = !source;
+
   if (!source) {
     [source] = await db
       .insert(reviewSources)
@@ -157,6 +159,17 @@ export async function connectGoogleReviewSource(businessId: string, businessName
       .set({ sourceUrl: placeId })
       .where(eq(reviewSources.id, source.id))
       .returning();
+  }
+
+  // Every business starts with the bundled demo dataset (see
+  // createAccountWithDemoBusiness) so the dashboard has something to show
+  // before real data exists. The FIRST time real Google reviews connect,
+  // that synthetic data is no longer representative of the practice and
+  // would otherwise sit there diluting real review counts/percentages and
+  // keeping the "DEMO DATA" banner showing — so it's removed here, once.
+  // Cascades to review_theme_mentions via onDelete: "cascade" in schema.pg.ts.
+  if (isFirstConnect) {
+    await db.delete(reviews).where(and(eq(reviews.businessId, businessId), eq(reviews.isDemoData, true)));
   }
 
   const fetched = await getReviewDataProvider("google").fetchReviews({ businessName, sourceUrl: placeId });
@@ -416,6 +429,13 @@ export async function getDashboardData(businessId: string) {
   const emergingIssuesCount = rollups.filter((r) => r.trendDirection === "new").length;
   const importantThemesCount = rollups.length;
 
+  // Drives whether <DemoDataBanner /> shows (see app/dashboard/page.tsx) —
+  // true only until a business's first real review source connects and its
+  // demo reviews are removed (see connectGoogleReviewSource above). A
+  // business with zero reviews at all (shouldn't normally happen — every
+  // signup gets the demo dataset) is treated as demo too, the safer default.
+  const hasDemoData = totalReviews === 0 || allReviews.some((r) => r.isDemoData);
+
   return {
     business,
     totalReviews,
@@ -427,5 +447,6 @@ export async function getDashboardData(businessId: string) {
     latestRun,
     latestReport,
     rollups: [...rollups].sort((a, b) => b.mentionCount - a.mentionCount),
+    hasDemoData,
   };
 }
