@@ -16,6 +16,16 @@ const FindSchema = z.object({
 // email for each new one, per the point-24 semi-automated design (see
 // docs/OUTREACH-AUTOMATION.md). Nothing is sent here — this only creates
 // "drafted" rows for a human to review in the outreach queue.
+//
+// A live Outscraper Maps Search (async=false) can genuinely take 20-40+
+// seconds for a fresh city/category — longer than Vercel's default 10s
+// function timeout. Without this, a real search could get killed
+// server-side mid-request, which the browser would eventually see as a
+// failed fetch even though the button looked stuck on "Searching…" first.
+// 60s is the max allowed on Vercel's Hobby plan; raise further only if
+// upgraded to Pro and 60s still isn't enough.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const authorized = await hasValidAdminSession();
   if (!authorized) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
