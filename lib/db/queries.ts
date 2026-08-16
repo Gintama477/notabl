@@ -16,12 +16,24 @@ import {
   events,
   emailDeliveries,
   feedback,
+  prospects,
 } from "@/lib/db/schema.pg";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
 import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
 import { DEFAULT_PLAN, PLANS } from "@/config/pricing";
+import { findProspects } from "@/lib/outreach/findProspects";
+import { buildOutreachEmailSubject, buildOutreachDraftBody, buildOutreachEmailHtml, buildOutreachEmailText } from "@/lib/email/templates/outreachEmail";
+import { sendOutreachEmail } from "@/lib/email/send";
+
+// Global (not per-IP — see lib/rateLimit.ts for why that's a different
+// concern) cap on real outreach sends per rolling 24h, enforced in
+// sendProspectEmail below via a DB count query rather than in-memory, since
+// it needs to hold across serverless instances. Configurable because "how
+// much is too much" is a judgment call the business owner gets to make, not
+// a hardcoded product decision — see docs/OUTREACH-AUTOMATION.md.
+const OUTREACH_DAILY_SEND_CAP = Number(process.env.OUTREACH_DAILY_SEND_CAP) || 15;
 
 export const SAMPLE_REPORT_ACCOUNT_EMAIL = "sample-report@notabl.demo";
 
@@ -449,4 +461,153 @@ export async function getDashboardData(businessId: string) {
     rollups: [...rollups].sort((a, b) => b.mentionCount - a.mentionCount),
     hasDemoData,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Outreach (cold email to prospective, not-yet-customer practices)
+// ---------------------------------------------------------------------------
+//
+// The whole feature is deliberately one-at-a-time and human-reviewed: find
+// drafts a Tier-1 (public-info-only, no fabricated review specifics — see
+// marketing/personalized-outreach-system.md) email per prospect, an admin
+// reviews/edits it in the outreach queue, and only their explicit Send
+// click actually emails anyone. This is the resolution to a real conflict
+// with this project's own "no automated mass outreach" rule (point 24,
+// see app/api/admin/pilot/invite/route.ts's comment) — the business owner
+// was shown that conflict directly and approved this semi-automated
+// design, with an explicit note that a fully automated version may be
+// adopted later if this review step becomes too much friction. See
+// docs/OUTREACH-AUTOMATION.md for the full writeup.
+
+/**
+ * Finds prospective dental practices in a city/state via Outscraper Maps
+ * Search (public listing info only — see lib/outreach/findProspects.ts) and
+ * drafts a cold-outreach email for each one not already in the queue.
+ * Dedupes by Google Place ID (prospects_place_id_unique) so re-running the
+ * same search is safe — already-seen practices are skipped, not
+ * re-drafted/re-added. Sends nothing; only creates "drafted" rows.
+ */
+export async function findAndDraftProspects(opts: {
+  city: string;
+  state: string;
+  category?: string;
+  limit?: number;
+  sampleReportUrl: string;
+  senderName: string;
+}) {
+  const found = await findProspects({
+    city: opts.city,
+    state: opts.state,
+    category: opts.category,
+    limit: opts.limit,
+  });
+
+  let added = 0;
+  let alreadyExisted = 0;
+  for (const p of found) {
+    const [existing] = await db
+      .select({ id: prospects.id })
+      .from(prospects)
+      .where(eq(prospects.googlePlaceId, p.googlePlaceId))
+      .limit(1);
+    if (existing) {
+      alreadyExisted++;
+      continue;
+    }
+
+    const emailSubject = buildOutreachEmailSubject(p.businessName);
+    const emailBody = buildOutreachDraftBody({
+      practiceName: p.businessName,
+      sampleReportUrl: opts.sampleReportUrl,
+      senderName: opts.senderName,
+    });
+
+    await db.insert(prospects).values({
+      businessName: p.businessName,
+      website: p.website,
+      phone: p.phone,
+      city: p.city,
+      state: p.state,
+      googlePlaceId: p.googlePlaceId,
+      googleRating: p.googleRating,
+      googleReviewCount: p.googleReviewCount,
+      contactEmail: p.contactEmail,
+      emailSubject,
+      emailBody,
+      status: "drafted",
+    });
+    added++;
+  }
+
+  return { found: found.length, added, alreadyExisted };
+}
+
+export async function getProspects() {
+  return db.select().from(prospects).orderBy(desc(prospects.createdAt));
+}
+
+/** Lets the admin fix up the contact email and/or the auto-drafted subject/body before sending. */
+export async function updateProspectDraft(
+  id: string,
+  changes: { contactEmail?: string; emailSubject?: string; emailBody?: string }
+) {
+  const values: Partial<{ contactEmail: string | null; emailSubject: string; emailBody: string }> = {};
+  if (changes.contactEmail !== undefined) values.contactEmail = changes.contactEmail || null;
+  if (changes.emailSubject !== undefined) values.emailSubject = changes.emailSubject;
+  if (changes.emailBody !== undefined) values.emailBody = changes.emailBody;
+  if (Object.keys(values).length === 0) return;
+  await db.update(prospects).set(values).where(eq(prospects.id, id));
+}
+
+export async function skipProspect(id: string, reason: string) {
+  await db
+    .update(prospects)
+    .set({ status: "skipped", skipReason: reason || null })
+    .where(eq(prospects.id, id));
+}
+
+/**
+ * Sends one prospect's drafted (and admin-reviewed) outreach email — the
+ * actual "approve and send" action, one prospect at a time, deliberately no
+ * "send all" path. Marks the row "sent" only when a real email actually
+ * went out (a real RESEND_API_KEY is configured); when running in demo mode
+ * it's marked "demo_sent" instead, so the admin queue never looks like a
+ * real practice was emailed when nothing left the server — and demo sends
+ * deliberately don't count against the daily cap below, since only real
+ * sends carry the risk that cap exists to bound.
+ */
+export async function sendProspectEmail(id: string) {
+  const [prospect] = await db.select().from(prospects).where(eq(prospects.id, id)).limit(1);
+  if (!prospect) throw new Error("Prospect not found.");
+  if (prospect.status === "sent" || prospect.status === "demo_sent") {
+    throw new Error("Already sent to this prospect.");
+  }
+  if (prospect.status === "skipped") throw new Error("This prospect was skipped.");
+  if (!prospect.contactEmail) throw new Error("No contact email set for this prospect yet.");
+  if (!prospect.emailSubject || !prospect.emailBody) throw new Error("Prospect is missing a drafted subject/body.");
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const recentSends = await db
+    .select({ id: prospects.id })
+    .from(prospects)
+    .where(and(eq(prospects.status, "sent"), gte(prospects.sentAt, since)));
+  if (recentSends.length >= OUTREACH_DAILY_SEND_CAP) {
+    throw new Error(`Daily outreach send cap (${OUTREACH_DAILY_SEND_CAP}) reached — try again tomorrow.`);
+  }
+
+  const html = buildOutreachEmailHtml(prospect.emailBody);
+  const text = buildOutreachEmailText(prospect.emailBody);
+  const result = await sendOutreachEmail({
+    recipientEmail: prospect.contactEmail,
+    subject: prospect.emailSubject,
+    html,
+    text,
+  });
+
+  await db
+    .update(prospects)
+    .set({ status: result.sent ? "sent" : "demo_sent", sentAt: new Date().toISOString() })
+    .where(eq(prospects.id, id));
+
+  return result;
 }

@@ -34,6 +34,21 @@ is allowed to have but a deployed one isn't.
   outscraper.com, add it in Vercel Environment Variables. Retire this once
   the official Google Business Profile API access (below) is approved.
 
+## Now (optional — improves the outreach-automation feature)
+
+None of these block testing the outreach feature — without them it runs
+entirely in demo mode (drafts and logs, emails no one real). See
+`docs/OUTREACH-AUTOMATION.md` for the full picture.
+
+- **`OUTREACH_SENDER_NAME`** — your real name, used as the sign-off on
+  drafted cold-outreach emails. Defaults to "Notabl" if unset.
+- **`OUTREACH_FROM_ADDRESS`** — a real-looking personal address to send
+  outreach from once Resend is configured (falls back to
+  `EMAIL_FROM_ADDRESS` if unset — that one's fine for transactional email
+  but not ideal for cold outreach, per `marketing/outreach-materials.md`).
+- **`OUTREACH_DAILY_SEND_CAP`** — max real outreach sends per rolling 24h.
+  Defaults to 15.
+
 ## Before public beta (before real strangers use this and you charge them)
 
 - **Google Business Profile API access** and/or **Yelp Fusion API access**,

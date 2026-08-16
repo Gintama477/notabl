@@ -188,6 +188,44 @@ export async function sendPilotInviteEmail(opts: {
 }
 
 /**
+ * Sends a single cold-outreach email to a prospective (not-yet-customer)
+ * dental practice. Deliberately separate from the senders above: there's no
+ * businesses row for a prospect yet (they haven't signed up), so this
+ * doesn't write to email_deliveries (which requires a real business_id FK)
+ * — the prospects table itself (status/sentAt, see lib/db/schema.pg.ts and
+ * sendProspectEmail in lib/db/queries.ts) is this feature's audit trail
+ * instead. Same demo-mode fallback as every sender above: without
+ * RESEND_API_KEY, logs to the console and reports back { sent: false, demo:
+ * true } instead of failing, so the whole outreach queue is testable with
+ * zero real-world risk (and zero real dental practice ever emailed) until
+ * Resend is actually configured.
+ */
+export async function sendOutreachEmail(opts: {
+  recipientEmail: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<{ sent: boolean; demo: boolean }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  // Per marketing/outreach-materials.md's explicit rule — "send from a real
+  // name and a real-looking personal address, not team@ or noreply@" — this
+  // is deliberately a separate env var from EMAIL_FROM_ADDRESS (used for
+  // the product's transactional emails, where a generic address is fine).
+  // Falls back to EMAIL_FROM_ADDRESS if unset so this never crashes, but
+  // set OUTREACH_FROM_ADDRESS for real sends — see docs/OUTREACH-AUTOMATION.md.
+  const fromAddress = process.env.OUTREACH_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+
+  if (!apiKey) {
+    console.log(`[demo email] Would send outreach "${opts.subject}" to ${opts.recipientEmail}`);
+    return { sent: false, demo: true };
+  }
+
+  const resend = new Resend(apiKey);
+  await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, subject: opts.subject, html: opts.html, text: opts.text });
+  return { sent: true, demo: false };
+}
+
+/**
  * Sends the magic-link login email. Same demo-mode fallback as
  * sendWeeklyReportEmail (logs + records an email_deliveries row instead of
  * sending when RESEND_API_KEY isn't set), but ALSO returns the raw login URL

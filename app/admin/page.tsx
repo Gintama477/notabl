@@ -1,7 +1,8 @@
-import { getAdminOverview } from "@/lib/db/queries";
+import { getAdminOverview, getProspects } from "@/lib/db/queries";
 import { formatPrice } from "@/config/pricing";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { PilotInviteForm, PilotToggleTable, PilotRow, ConnectGoogleReviewsForm } from "@/components/admin/PilotManagement";
+import { FindProspectsForm, OutreachQueueTable, ProspectRow } from "@/components/admin/OutreachQueue";
 
 // Intentionally minimal per the development rule ("do NOT overbuild the
 // admin dashboard") — raw numbers, no charts library, no pagination.
@@ -47,6 +48,24 @@ export default async function AdminPage({
   }
 
   const data = await getAdminOverview();
+  const allProspects = await getProspects();
+
+  const prospectRows: ProspectRow[] = allProspects.map((p) => ({
+    id: p.id,
+    businessName: p.businessName,
+    website: p.website,
+    phone: p.phone,
+    city: p.city,
+    state: p.state,
+    googleRating: p.googleRating,
+    googleReviewCount: p.googleReviewCount,
+    contactEmail: p.contactEmail,
+    emailSubject: p.emailSubject,
+    emailBody: p.emailBody,
+    status: p.status,
+    sentAt: p.sentAt,
+    skipReason: p.skipReason,
+  }));
 
   const pilotRows: PilotRow[] = data.accounts.map((a) => {
     const business = data.businesses.find((b) => b.accountId === a.id);
@@ -123,6 +142,19 @@ export default async function AdminPage({
             <PilotInviteForm />
           </div>
           <PilotToggleTable rows={pilotRows} />
+        </Section>
+
+        <Section title={`Outreach — Cold Email (${prospectRows.length})`}>
+          <div className="p-4">
+            <p className="mb-3 text-sm text-slate-600">
+              Finds public dental-practice listings by city/state (name, address, phone, website, public
+              star rating — never review content) and drafts a cold-outreach email for each new one.
+              Nothing sends automatically — review and edit each draft below, then click Send yourself,
+              one practice at a time. See docs/OUTREACH-AUTOMATION.md.
+            </p>
+            <FindProspectsForm />
+          </div>
+          <OutreachQueueTable rows={prospectRows} />
         </Section>
 
         <Section title="Subscriptions">

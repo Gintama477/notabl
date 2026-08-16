@@ -289,6 +289,42 @@ export const automationLogs = pgTable("automation_logs", {
   finishedAt: text("finished_at"),
 });
 
+// ---------------------------------------------------------------------------
+// Outreach (cold email to prospective, not-yet-customer practices)
+// ---------------------------------------------------------------------------
+
+// One row per prospective dental practice found via lib/outreach/findProspects.ts
+// (Outscraper Maps Search — public business-listing info only, never review
+// content). Status flow: drafted -> sent | demo_sent | skipped. See
+// docs/OUTREACH-AUTOMATION.md for the full design, including the point-24
+// ("no automated mass outreach") reasoning and the deliberate one-at-a-time,
+// human-approves-before-send flow this table backs.
+export const prospects = pgTable(
+  "prospects",
+  {
+    id: id(),
+    businessName: text("business_name").notNull(),
+    website: text("website"),
+    phone: text("phone"),
+    city: text("city"),
+    state: text("state"),
+    googlePlaceId: text("google_place_id").notNull(),
+    googleRating: doublePrecision("google_rating"),
+    googleReviewCount: integer("google_review_count"),
+    contactEmail: text("contact_email"),
+    emailSubject: text("email_subject"),
+    emailBody: text("email_body"),
+    status: text("status").notNull().default("drafted"),
+    sentAt: text("sent_at"),
+    skipReason: text("skip_reason"),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    placeIdUnique: uniqueIndex("prospects_place_id_unique").on(t.googlePlaceId),
+    statusIdx: index("prospects_status_idx").on(t.status, t.createdAt),
+  })
+);
+
 export const feedback = pgTable("feedback", {
   id: id(),
   accountId: text("account_id").references(() => accounts.id, { onDelete: "set null" }),
