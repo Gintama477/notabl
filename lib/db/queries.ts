@@ -144,8 +144,6 @@ export async function connectGoogleReviewSource(businessId: string, businessName
     .where(and(eq(reviewSources.businessId, businessId), eq(reviewSources.sourceType, "google")))
     .limit(1);
 
-  const isFirstConnect = !source;
-
   if (!source) {
     [source] = await db
       .insert(reviewSources)
@@ -163,14 +161,16 @@ export async function connectGoogleReviewSource(businessId: string, businessName
 
   // Every business starts with the bundled demo dataset (see
   // createAccountWithDemoBusiness) so the dashboard has something to show
-  // before real data exists. The FIRST time real Google reviews connect,
-  // that synthetic data is no longer representative of the practice and
-  // would otherwise sit there diluting real review counts/percentages and
-  // keeping the "DEMO DATA" banner showing — so it's removed here, once.
-  // Cascades to review_theme_mentions via onDelete: "cascade" in schema.pg.ts.
-  if (isFirstConnect) {
-    await db.delete(reviews).where(and(eq(reviews.businessId, businessId), eq(reviews.isDemoData, true)));
-  }
+  // before real data exists. Once real Google reviews are connected, that
+  // synthetic data is no longer representative of the practice and would
+  // otherwise sit there diluting real review counts/percentages and keeping
+  // the "DEMO DATA" banner showing — so it's cleared here on every connect
+  // call, not just the first. Deliberately unconditional (not gated on
+  // "is this the first connect") so it also cleans up any business that
+  // connected before this cleanup existed — running it again when there's
+  // no demo data left just deletes zero rows, harmless either way. Cascades
+  // to review_theme_mentions via onDelete: "cascade" in schema.pg.ts.
+  await db.delete(reviews).where(and(eq(reviews.businessId, businessId), eq(reviews.isDemoData, true)));
 
   const fetched = await getReviewDataProvider("google").fetchReviews({ businessName, sourceUrl: placeId });
 
