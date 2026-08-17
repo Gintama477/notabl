@@ -186,9 +186,9 @@ function sourceOnDomain(e: FoundEmail, normalizedDomain: string): boolean {
 }
 
 // Substrings checked against an entry's `title`, lowercased — matches the
-// "dentist/owner/manager-sounding" examples given (e.g. "lead dentist",
-// "practice manager", "owner") plus a couple of obvious synonyms a dental
-// practice's contact list would realistically use.
+// "owner, dentist, office/practice/studio manager, or coordinator" examples
+// given (e.g. "lead dentist", "practice manager", "owner") plus a couple of
+// obvious synonyms a dental practice's contact list would realistically use.
 const DECISION_MAKER_TITLE_KEYWORDS = [
   "dentist",
   "dds",
@@ -196,6 +196,7 @@ const DECISION_MAKER_TITLE_KEYWORDS = [
   "doctor",
   "owner",
   "manager",
+  "coordinator",
   "director",
   "founder",
   "principal",
@@ -207,6 +208,38 @@ function hasDecisionMakerTitle(title: string | null): boolean {
   return DECISION_MAKER_TITLE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+function localPart(value: string): string {
+  const at = value.indexOf("@");
+  return (at === -1 ? value : value.slice(0, at)).toLowerCase();
+}
+
+// Meant for general inquiries — a reasonable email to send an outreach pitch
+// to when no named contact is available.
+const GENERAL_INQUIRY_PREFIXES = ["hello", "info", "contact", "office", "admin"];
+
+// Narrow-purpose role addresses — for a specific kind of inquiry (press,
+// legal, recruiting, ...), not general contact. Someone checking one of
+// these would likely ignore a sales-style outreach email, so these rank
+// below even an unclassified domain-matching address; only used if
+// literally nothing else on the domain is available.
+const NARROW_PURPOSE_PREFIXES = ["press", "media", "pr", "privacy", "legal", "security", "careers", "jobs"];
+
+function isGeneralInquiryAddress(value: string): boolean {
+  const local = localPart(value);
+  return GENERAL_INQUIRY_PREFIXES.some((prefix) => local.includes(prefix));
+}
+
+function isNarrowPurposeAddress(value: string): boolean {
+  const local = localPart(value);
+  return NARROW_PURPOSE_PREFIXES.some((prefix) => local.includes(prefix));
+}
+
+// Any domain-matching tier must always outrank any non-domain-matching one
+// (see pickBestEmail's doc comment) — spacing domain-match category scores
+// starting well above the non-domain-matching max (1) guarantees that no
+// combination of category*2 + sourceBonus can ever dip below it.
+const DOMAIN_MATCH_BASE = 10;
+
 /**
  * Ranks candidate emails and returns the best one, or null if the list is
  * empty. A strict priority order, NOT an additive score — a domain match
@@ -216,17 +249,26 @@ function hasDecisionMakerTitle(title: string | null): boolean {
  * entirely). A nicer title never overrides a domain mismatch; it only
  * breaks ties among emails that don't otherwise match the domain at all.
  *
- * Tier 3 (strongest): the address itself is on the queried domain AND
- *   Outscraper's `source` for it is also the queried domain's own site.
- * Tier 2: the address itself is on the queried domain, regardless of
- *   `source` (or `source` missing) — checked separately from `source`
- *   because the entries worth preferring most, named contacts, frequently
- *   have no `source` at all (see the real example in this file's header).
- * Tier 1 (last resort before plain fallback): the domain doesn't match at
- *   all, but this is a named contact with a dentist/owner/manager-sounding
- *   title.
- * Tier 0: no signal — falls back to whichever entry came first in
- *   Outscraper's own ordering, same as ties within any other tier.
+ * Among emails that DO match the queried domain (the address itself, per
+ * addressOnDomain — `source` only breaks ties within a category, see
+ * below), a second priority order applies:
+ *   1. Best — a named contact (full_name present) with a business-relevant
+ *      title: owner, dentist, office/practice/studio manager, coordinator.
+ *   2. Good fallback — a generic general-inquiry address (hello@, info@,
+ *      contact@, office@, admin@).
+ *   3. Any other domain-matching email that isn't classified above.
+ *   4. Worst (last resort, only if nothing else on the domain matched at
+ *      all) — a narrow-purpose role address (press@, media@, pr@,
+ *      privacy@, legal@, security@, careers@, jobs@): meant for a specific
+ *      kind of inquiry, not general contact.
+ * Within any of those four categories, an email whose `source` is also the
+ * queried domain's own site (not just the address) is preferred — but this
+ * never crosses a category boundary, e.g. a source-matching narrow-purpose
+ * address still ranks below a non-source-matching general-inquiry one.
+ *
+ * Outside a domain match, a named contact with a business-relevant title is
+ * a last resort before the plain "first in the list" fallback — never
+ * allowed to outrank any domain-matching email regardless of its category.
  */
 export function pickBestEmail(domain: string, emails: FoundEmail[]): FoundEmail | null {
   if (emails.length === 0) return null;
@@ -234,9 +276,18 @@ export function pickBestEmail(domain: string, emails: FoundEmail[]): FoundEmail 
 
   function tier(e: FoundEmail): number {
     const addrMatch = addressOnDomain(e, normalizedDomain);
-    const srcMatch = sourceOnDomain(e, normalizedDomain);
-    if (addrMatch && srcMatch) return 3;
-    if (addrMatch) return 2;
+
+    if (addrMatch) {
+      let category: number;
+      if (e.fullName && hasDecisionMakerTitle(e.title)) category = 3;
+      else if (isGeneralInquiryAddress(e.value)) category = 2;
+      else if (isNarrowPurposeAddress(e.value)) category = 0;
+      else category = 1;
+
+      const sourceBonus = sourceOnDomain(e, normalizedDomain) ? 1 : 0;
+      return DOMAIN_MATCH_BASE + category * 2 + sourceBonus;
+    }
+
     if (hasDecisionMakerTitle(e.title)) return 1;
     return 0;
   }
