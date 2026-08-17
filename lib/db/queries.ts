@@ -24,6 +24,7 @@ import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
 import { DEFAULT_PLAN, PLANS } from "@/config/pricing";
 import { findProspects } from "@/lib/outreach/findProspects";
+import { fetchDomainEmails, pickBestEmail, hostnameOf } from "@/lib/outreach/findEmail";
 import { buildOutreachEmailSubject, buildOutreachDraftBody, buildOutreachEmailHtml, buildOutreachEmailText } from "@/lib/email/templates/outreachEmail";
 import { sendOutreachEmail } from "@/lib/email/send";
 
@@ -557,6 +558,32 @@ export async function updateProspectDraft(
   if (changes.emailBody !== undefined) values.emailBody = changes.emailBody;
   if (Object.keys(values).length === 0) return;
   await db.update(prospects).set(values).where(eq(prospects.id, id));
+}
+
+/**
+ * Looks up a contact email for one prospect's website domain via
+ * Outscraper's Domain Emails & Contacts API — a deliberate, single-prospect,
+ * admin-clicked action (see the "Find Email" button in
+ * components/admin/OutreachQueue.tsx), never run in bulk from
+ * findAndDraftProspects above: the ~45s response time and Vercel Hobby's
+ * 60s function-duration cap make a bulk version infeasible, and per-prospect
+ * review is the point of this queue anyway. Doesn't write to the database —
+ * the admin still has to click "Save Draft" to persist whatever this finds,
+ * same as if they'd typed it in themselves.
+ */
+export async function findEmailForProspect(
+  id: string
+): Promise<{ email: string | null; source: string | null; totalFound: number }> {
+  const [prospect] = await db.select().from(prospects).where(eq(prospects.id, id)).limit(1);
+  if (!prospect) throw new Error("Prospect not found.");
+  if (!prospect.website) throw new Error("This prospect has no website on file to look up an email for.");
+
+  const domain = hostnameOf(prospect.website);
+  if (!domain) throw new Error(`This prospect's website ("${prospect.website}") isn't a parseable URL.`);
+
+  const emails = await fetchDomainEmails(domain);
+  const best = pickBestEmail(domain, emails);
+  return { email: best?.value ?? null, source: best?.source ?? null, totalFound: emails.length };
 }
 
 export async function skipProspect(id: string, reason: string) {

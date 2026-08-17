@@ -152,6 +152,8 @@ function ProspectRowItem({
   const [body, setBody] = useState(row.emailBody ?? "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [findingEmail, setFindingEmail] = useState(false);
+  const [emailLookupMessage, setEmailLookupMessage] = useState<string | null>(null);
 
   const isFinal = row.status === "sent" || row.status === "demo_sent" || row.status === "skipped";
 
@@ -213,6 +215,40 @@ function ProspectRowItem({
     }
   }
 
+  /**
+   * Looks up an email for this one prospect's website via
+   * /api/admin/outreach/find-email — a deliberate per-click action, never
+   * run automatically (see that route's doc comment for why). Only fills
+   * the field on a hit; a miss or an error leaves whatever's already typed
+   * there untouched and just reports what happened.
+   */
+  async function findEmail() {
+    setFindingEmail(true);
+    setEmailLookupMessage(null);
+    try {
+      const res = await fetch("/api/admin/outreach/find-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prospectId: row.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailLookupMessage(data.error?.formErrors?.[0] || data.error || "Email lookup failed.");
+      } else if (data.email) {
+        setContactEmail(data.email);
+        setEmailLookupMessage(
+          data.totalFound > 1 ? `Found: ${data.email} (${data.totalFound} email(s) found total)` : `Found: ${data.email}`
+        );
+      } else {
+        setEmailLookupMessage("No email found for this domain.");
+      }
+    } catch {
+      setEmailLookupMessage("Email lookup failed.");
+    } finally {
+      setFindingEmail(false);
+    }
+  }
+
   async function skip() {
     const reason = prompt("Reason for skipping (optional):") || "";
     setBusy(true);
@@ -256,12 +292,24 @@ function ProspectRowItem({
 
       {expanded && !isFinal && (
         <div className="mt-3 grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-          <input
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-            placeholder="Contact email (required to send)"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
+          <div className="flex gap-2">
+            <input
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="Contact email (required to send)"
+              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={findEmail}
+              disabled={busy || findingEmail || !row.website}
+              title={row.website ? "Look up an email for this prospect's website domain" : "This prospect has no website on file"}
+              className="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {findingEmail ? "Looking up… (~45s)" : "Find Email"}
+            </button>
+          </div>
+          {emailLookupMessage && <p className="text-xs text-slate-500">{emailLookupMessage}</p>}
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
@@ -277,21 +325,21 @@ function ProspectRowItem({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={save}
-              disabled={busy}
+              disabled={busy || findingEmail}
               className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
               Save Draft
             </button>
             <button
               onClick={send}
-              disabled={busy || !contactEmail}
+              disabled={busy || findingEmail || !contactEmail}
               className="rounded-md bg-teal-700 px-3 py-1 text-xs font-medium text-white hover:bg-teal-800 disabled:opacity-60"
             >
               Send
             </button>
             <button
               onClick={skip}
-              disabled={busy}
+              disabled={busy || findingEmail}
               className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
             >
               Skip
