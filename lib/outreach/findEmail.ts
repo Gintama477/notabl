@@ -45,7 +45,7 @@ async function pollUntilDone(taskId: string, apiKey: string): Promise<unknown> {
     const res = await fetch(`${OUTSCRAPER_BASE}/requests/${taskId}`, { headers });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Outscraper poll request failed (${res.status}): ${body.slice(0, 500)}`);
+      throw new Error(`Outscraper poll request failed (${res.status}): ${body.slice(0, 3000)}`);
     }
     last = await res.json();
     const status = (last as { status?: string })?.status;
@@ -73,7 +73,7 @@ export async function fetchDomainEmails(domain: string): Promise<FoundEmail[]> {
   const initialRes = await fetch(url.toString(), { headers: { "X-API-KEY": apiKey } });
   if (!initialRes.ok) {
     const body = await initialRes.text().catch(() => "");
-    throw new Error(`Outscraper request failed (${initialRes.status}) for "${domain}": ${body.slice(0, 500)}`);
+    throw new Error(`Outscraper request failed (${initialRes.status}) for "${domain}": ${body.slice(0, 3000)}`);
   }
   const initialJson = (await initialRes.json()) as { id?: string } & OutscraperEmailsResponse;
 
