@@ -31,6 +31,7 @@ export async function sendWeeklyReportEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
@@ -49,7 +50,7 @@ export async function sendWeeklyReportEmail(opts: {
   try {
     const resend = new Resend(apiKey);
     const result = await resend.emails.send({
-      from: fromAddress,
+      from: `${fromName} <${fromAddress}>`,
       to: opts.recipientEmail,
       replyTo: replyToAddress,
       subject,
@@ -98,6 +99,7 @@ export async function sendWelcomeEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
@@ -114,7 +116,7 @@ export async function sendWelcomeEmail(opts: {
 
   try {
     const resend = new Resend(apiKey);
-    const result = await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
+    const result = await resend.emails.send({ from: `${fromName} <${fromAddress}>`, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
     await db.insert(emailDeliveries).values({
       businessId: opts.businessId,
       recipientEmail: opts.recipientEmail,
@@ -153,6 +155,7 @@ export async function sendPilotInviteEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
@@ -169,7 +172,7 @@ export async function sendPilotInviteEmail(opts: {
 
   try {
     const resend = new Resend(apiKey);
-    const result = await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
+    const result = await resend.emails.send({ from: `${fromName} <${fromAddress}>`, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
     await db.insert(emailDeliveries).values({
       businessId: opts.businessId,
       recipientEmail: opts.recipientEmail,
@@ -218,6 +221,11 @@ export async function sendOutreachEmail(opts: {
   // Falls back to EMAIL_FROM_ADDRESS if unset so this never crashes, but
   // set OUTREACH_FROM_ADDRESS for real sends — see docs/OUTREACH-AUTOMATION.md.
   const fromAddress = process.env.OUTREACH_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  // Same "real name, not a generic brand address" rule from
+  // marketing/outreach-materials.md applies to the display name, not just
+  // the address — deliberately a separate env var from EMAIL_FROM_NAME
+  // (used by the other four senders below).
+  const fromName = process.env.OUTREACH_SENDER_NAME || "Notabl";
   // Same REPLY_TO_ADDRESS as every other sender below (falls back to
   // EMAIL_FROM_ADDRESS, not OUTREACH_FROM_ADDRESS) — replies from a prospect
   // should land in the same real inbox as replies to product emails, not
@@ -230,7 +238,7 @@ export async function sendOutreachEmail(opts: {
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, replyTo: replyToAddress, subject: opts.subject, html: opts.html, text: opts.text });
+  await resend.emails.send({ from: `${fromName} <${fromAddress}>`, to: opts.recipientEmail, replyTo: replyToAddress, subject: opts.subject, html: opts.html, text: opts.text });
   return { sent: true, demo: false };
 }
 
@@ -256,6 +264,7 @@ export async function sendLoginEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
@@ -273,7 +282,7 @@ export async function sendLoginEmail(opts: {
   try {
     const resend = new Resend(apiKey);
     const result = await resend.emails.send({
-      from: fromAddress,
+      from: `${fromName} <${fromAddress}>`,
       to: opts.recipientEmail,
       replyTo: replyToAddress,
       subject,
