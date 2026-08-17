@@ -31,6 +31,7 @@ export async function sendWeeklyReportEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
     console.log(`[demo email] Would send "${subject}" to ${opts.recipientEmail}`);
@@ -50,6 +51,7 @@ export async function sendWeeklyReportEmail(opts: {
     const result = await resend.emails.send({
       from: fromAddress,
       to: opts.recipientEmail,
+      replyTo: replyToAddress,
       subject,
       html,
       text,
@@ -96,6 +98,7 @@ export async function sendWelcomeEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
     console.log(`[demo email] Would send "${subject}" to ${opts.recipientEmail}`);
@@ -111,7 +114,7 @@ export async function sendWelcomeEmail(opts: {
 
   try {
     const resend = new Resend(apiKey);
-    const result = await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, subject, html, text });
+    const result = await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
     await db.insert(emailDeliveries).values({
       businessId: opts.businessId,
       recipientEmail: opts.recipientEmail,
@@ -150,6 +153,7 @@ export async function sendPilotInviteEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
     console.log(`[demo email] Would send "${subject}" to ${opts.recipientEmail}: ${opts.input.loginUrl}`);
@@ -165,7 +169,7 @@ export async function sendPilotInviteEmail(opts: {
 
   try {
     const resend = new Resend(apiKey);
-    const result = await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, subject, html, text });
+    const result = await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
     await db.insert(emailDeliveries).values({
       businessId: opts.businessId,
       recipientEmail: opts.recipientEmail,
@@ -214,6 +218,11 @@ export async function sendOutreachEmail(opts: {
   // Falls back to EMAIL_FROM_ADDRESS if unset so this never crashes, but
   // set OUTREACH_FROM_ADDRESS for real sends — see docs/OUTREACH-AUTOMATION.md.
   const fromAddress = process.env.OUTREACH_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  // Same REPLY_TO_ADDRESS as every other sender below (falls back to
+  // EMAIL_FROM_ADDRESS, not OUTREACH_FROM_ADDRESS) — replies from a prospect
+  // should land in the same real inbox as replies to product emails, not
+  // get split across two addresses.
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
 
   if (!apiKey) {
     console.log(`[demo email] Would send outreach "${opts.subject}" to ${opts.recipientEmail}`);
@@ -221,7 +230,7 @@ export async function sendOutreachEmail(opts: {
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, subject: opts.subject, html: opts.html, text: opts.text });
+  await resend.emails.send({ from: fromAddress, to: opts.recipientEmail, replyTo: replyToAddress, subject: opts.subject, html: opts.html, text: opts.text });
   return { sent: true, demo: false };
 }
 
@@ -247,6 +256,7 @@ export async function sendLoginEmail(opts: {
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
     console.log(`[demo email] Would send "${subject}" to ${opts.recipientEmail}: ${opts.loginUrl}`);
@@ -265,6 +275,7 @@ export async function sendLoginEmail(opts: {
     const result = await resend.emails.send({
       from: fromAddress,
       to: opts.recipientEmail,
+      replyTo: replyToAddress,
       subject,
       html,
       text,
