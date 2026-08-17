@@ -88,7 +88,7 @@ export async function fetchDomainEmails(domain: string): Promise<FoundEmail[]> {
   if (!Array.isArray(rawEmails)) {
     throw new Error(
       `Outscraper emails-and-contacts response for "${domain}" didn't contain an "emails" array — response shape ` +
-        `may have changed. Raw response: ${JSON.stringify(finalJson).slice(0, 500)}`
+        `may have changed. Raw response: ${JSON.stringify(finalJson).slice(0, 3000)}`
     );
   }
 
