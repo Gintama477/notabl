@@ -1,0 +1,26 @@
+# Dependencies
+/node_modules
+
+# Next.js build output
+/.next/
+/out/
+
+# Production build
+/build
+
+# Local env files (never commit real secrets)
+.env
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# Local SQLite dev database (Phase 1 local dev only — prod uses Postgres/Supabase)
+*.db
+*.db-journal
