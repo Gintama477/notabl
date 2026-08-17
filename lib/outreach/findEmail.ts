@@ -173,19 +173,16 @@ function emailAddressDomain(value: string): string | null {
   return at === -1 ? null : value.slice(at + 1).toLowerCase() || null;
 }
 
-/**
- * True if this email is tied to the queried domain either by where
- * Outscraper found it (`source`) or by the address itself (the part after
- * `@`). Checking both matters because the entries worth preferring most —
- * named contacts — frequently have no `source` at all (see the real
- * example in this file's header), so `source` alone would miss them even
- * when the address is obviously @thatdomain.com.
- */
-function isOnDomain(e: FoundEmail, normalizedDomain: string): boolean {
-  const sourceHost = sourceHostname(e.source);
-  if (sourceHost !== null && normalizeHost(sourceHost) === normalizedDomain) return true;
+/** True if the email address itself (the part after `@`) is on the queried domain. */
+function addressOnDomain(e: FoundEmail, normalizedDomain: string): boolean {
   const addrDomain = emailAddressDomain(e.value);
   return addrDomain !== null && normalizeHost(addrDomain) === normalizedDomain;
+}
+
+/** True if Outscraper found this email on a page that's itself on the queried domain. */
+function sourceOnDomain(e: FoundEmail, normalizedDomain: string): boolean {
+  const sourceHost = sourceHostname(e.source);
+  return sourceHost !== null && normalizeHost(sourceHost) === normalizedDomain;
 }
 
 // Substrings checked against an entry's `title`, lowercased — matches the
@@ -212,36 +209,45 @@ function hasDecisionMakerTitle(title: string | null): boolean {
 
 /**
  * Ranks candidate emails and returns the best one, or null if the list is
- * empty. Two independent preferences, combined additively so an entry that
- * satisfies both outranks one that only satisfies one:
- *   - A named contact (full_name present) whose title sounds like a
- *     decision-maker (dentist/owner/manager/etc.) beats a generic,
- *     unattributed address (e.g. "press@", "privacy@").
- *   - An email tied to the queried domain itself (by `source` or by its
- *     own address, see isOnDomain above) beats one that's only tied to a
- *     third-party page (a directory listing, "duckduckgo", a mention
- *     elsewhere).
- * Ties (including "no signal on either axis") fall back to whichever
- * entry came first in Outscraper's own ordering.
+ * empty. A strict priority order, NOT an additive score — a domain match
+ * always beats a title match, full stop, because a title match on the
+ * wrong domain is very likely a completely unrelated person Outscraper's
+ * data conflated in (e.g. a "practice manager" at some other business
+ * entirely). A nicer title never overrides a domain mismatch; it only
+ * breaks ties among emails that don't otherwise match the domain at all.
+ *
+ * Tier 3 (strongest): the address itself is on the queried domain AND
+ *   Outscraper's `source` for it is also the queried domain's own site.
+ * Tier 2: the address itself is on the queried domain, regardless of
+ *   `source` (or `source` missing) — checked separately from `source`
+ *   because the entries worth preferring most, named contacts, frequently
+ *   have no `source` at all (see the real example in this file's header).
+ * Tier 1 (last resort before plain fallback): the domain doesn't match at
+ *   all, but this is a named contact with a dentist/owner/manager-sounding
+ *   title.
+ * Tier 0: no signal — falls back to whichever entry came first in
+ *   Outscraper's own ordering, same as ties within any other tier.
  */
 export function pickBestEmail(domain: string, emails: FoundEmail[]): FoundEmail | null {
   if (emails.length === 0) return null;
   const normalizedDomain = normalizeHost(domain);
 
-  function score(e: FoundEmail): number {
-    let points = 0;
-    if (e.fullName && hasDecisionMakerTitle(e.title)) points += 2;
-    if (isOnDomain(e, normalizedDomain)) points += 1;
-    return points;
+  function tier(e: FoundEmail): number {
+    const addrMatch = addressOnDomain(e, normalizedDomain);
+    const srcMatch = sourceOnDomain(e, normalizedDomain);
+    if (addrMatch && srcMatch) return 3;
+    if (addrMatch) return 2;
+    if (hasDecisionMakerTitle(e.title)) return 1;
+    return 0;
   }
 
   let best = emails[0];
-  let bestScore = score(best);
+  let bestTier = tier(best);
   for (const candidate of emails.slice(1)) {
-    const candidateScore = score(candidate);
-    if (candidateScore > bestScore) {
+    const candidateTier = tier(candidate);
+    if (candidateTier > bestTier) {
       best = candidate;
-      bestScore = candidateScore;
+      bestTier = candidateTier;
     }
   }
   return best;
