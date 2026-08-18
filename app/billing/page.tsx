@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSessionAccountId } from "@/lib/auth/session";
 import { getSubscriptionForAccount } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
@@ -42,8 +43,14 @@ export default async function BillingPage({
           )}
 
           {checkout === "success" && (
-            <div className="mt-4 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
-              Subscription started{!liveBilling ? " (simulated)" : ""}.
+            <div className="mt-4 rounded-md border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">
+              <p>Subscription started{!liveBilling ? " (simulated)" : ""}.</p>
+              <Link
+                href="/dashboard"
+                className="mt-3 inline-block rounded-md bg-teal-700 px-5 py-2 text-sm font-medium text-white hover:bg-teal-800"
+              >
+                Go to Dashboard
+              </Link>
             </div>
           )}
           {checkout === "failed" && (
