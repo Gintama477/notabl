@@ -17,6 +17,11 @@ export default function SignupPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set on a successful signup that also looks like a duplicate of an
+  // existing business (see findDuplicateBusiness in lib/db/queries.ts).
+  // Non-null means "show the heads-up instead of redirecting immediately" —
+  // an instant router.push would navigate away before anyone could read it.
+  const [duplicateNotice, setDuplicateNotice] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,11 +39,54 @@ export default function SignupPage() {
         setSubmitting(false);
         return;
       }
+      // Signup already succeeded (account/business created, session
+      // started) by this point either way — this only decides whether to
+      // redirect immediately or pause to show the heads-up first.
+      if (data.possibleDuplicate) {
+        setSubmitting(false);
+        setDuplicateNotice(true);
+        return;
+      }
       router.push("/dashboard");
     } catch {
       setError("Something went wrong. Please try again.");
       setSubmitting(false);
     }
+  }
+
+  if (duplicateNotice) {
+    return (
+      <>
+        <Header />
+        <main className="flex-1 py-16">
+          <div className="mx-auto max-w-lg px-6">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
+              <h1 className="font-serif text-xl font-semibold text-slate-900">One more thing</h1>
+              <p className="mt-3 text-sm text-amber-900">
+                A business with a similar name and location already has a Notabl account. If that&apos;s you,
+                sign in instead — creating a second account for the same practice won&apos;t unlock a second
+                trial.
+              </p>
+              <p className="mt-3 text-sm text-slate-600">
+                If this is a different, unrelated business, no action needed — your dashboard is ready.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  onClick={() => router.push("/dashboard")}
+                  className="rounded-md bg-teal-700 px-5 py-2 text-sm font-medium text-white hover:bg-teal-800"
+                >
+                  Continue to Dashboard
+                </button>
+                <a href="/login" className="rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                  Sign In Instead
+                </a>
+              </div>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </>
+    );
   }
 
   return (

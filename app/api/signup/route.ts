@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignupSchema } from "@/lib/validation/signup";
-import { createAccountWithDemoBusiness } from "@/lib/db/queries";
+import { createAccountWithDemoBusiness, findDuplicateBusiness } from "@/lib/db/queries";
 import { createSession } from "@/lib/auth/session";
 import { track } from "@/lib/analytics/track";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
@@ -41,6 +41,21 @@ export async function POST(req: NextRequest) {
 
     await createSession(account.id);
     await track("signup_completed", { accountId: account.id, businessId: business.id });
+
+    // Soft, non-blocking heads-up — see findDuplicateBusiness's doc comment
+    // in lib/db/queries.ts. Never stops the signup itself; the real
+    // enforcement is the trial-denial checks at checkout time (#1/#2).
+    // Only meaningful for a genuinely new signup, not the "reused" path
+    // (same email signing in again), which is just this same account.
+    const possibleDuplicate = reused
+      ? null
+      : await findDuplicateBusiness({
+          name: business.name,
+          city: business.city,
+          state: business.state,
+          excludeAccountId: account.id,
+        });
+
     if (!reused) {
       await track("business_added", { accountId: account.id, businessId: business.id });
       await track("trial_started", { accountId: account.id, businessId: business.id });
@@ -80,7 +95,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, businessId: business.id });
+    return NextResponse.json({ ok: true, businessId: business.id, possibleDuplicate: Boolean(possibleDuplicate) });
   } catch (err) {
     console.error("Signup failed:", err);
     await logAutomationError("signup", `Signup failed for ${parsed.data.email}: ${String(err)}`);
