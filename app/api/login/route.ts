@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { findAccountByEmail, getBusinessForAccount } from "@/lib/db/queries";
-import { createLoginToken } from "@/lib/auth/loginToken";
-import { sendLoginEmail } from "@/lib/email/send";
-
-const DEMO_LINK_COOKIE = "notabl_demo_login_link";
+import { sendMagicLoginLink, DEMO_LINK_COOKIE } from "@/lib/auth/sendMagicLink";
 
 const LoginSchema = z.object({ email: z.string().email() });
 
@@ -29,13 +26,11 @@ export async function POST(req: NextRequest) {
   if (account) {
     const business = await getBusinessForAccount(account.id);
     if (business) {
-      const token = await createLoginToken(account.id);
-      const loginUrl = new URL(`/api/login/verify?token=${token}`, req.url).toString();
-      const result = await sendLoginEmail({
+      const result = await sendMagicLoginLink({
+        accountId: account.id,
         businessId: business.id,
         recipientEmail: parsed.data.email,
-        loginUrl,
-        expiresInMinutes: 15,
+        origin: req.nextUrl.origin,
       });
       demoLoginUrl = result.demoLoginUrl;
     }

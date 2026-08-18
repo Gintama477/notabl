@@ -8,6 +8,7 @@ export const EVENT_NAMES = [
   "sample_report_viewed",
   "signup_started",
   "signup_completed",
+  "signup_attempted_existing_email",
   "onboarding_completed",
   "business_added",
   "dashboard_viewed",

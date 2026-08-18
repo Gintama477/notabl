@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SignupSchema } from "@/lib/validation/signup";
 import { createAccountWithDemoBusiness, findDuplicateBusiness } from "@/lib/db/queries";
 import { createSession } from "@/lib/auth/session";
+import { sendMagicLoginLink, DEMO_LINK_COOKIE } from "@/lib/auth/sendMagicLink";
 import { track } from "@/lib/analytics/track";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { sendWelcomeEmail } from "@/lib/email/send";
@@ -39,60 +40,82 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Could not create business" }, { status: 500 });
     }
 
+    // The email already had an account — do NOT log the caller in. Typing
+    // in an email you don't own is not proof you own it; that's exactly
+    // the account-takeover gap /api/login's magic-link flow exists to
+    // close (see lib/auth/loginToken.ts's header comment), which this path
+    // was quietly reopening by calling createSession unconditionally.
+    // Route through the same "prove you control this inbox" flow instead.
+    if (reused) {
+      await track("signup_attempted_existing_email", { accountId: account.id, businessId: business.id });
+      const { demoLoginUrl } = await sendMagicLoginLink({
+        accountId: account.id,
+        businessId: business.id,
+        recipientEmail: parsed.data.email,
+        origin: req.nextUrl.origin,
+      });
+
+      const res = NextResponse.json({ ok: true, redirectTo: "/login/check-email" });
+      if (demoLoginUrl) {
+        res.cookies.set(DEMO_LINK_COOKIE, demoLoginUrl, {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60,
+          path: "/login/check-email",
+        });
+      }
+      return res;
+    }
+
     await createSession(account.id);
     await track("signup_completed", { accountId: account.id, businessId: business.id });
 
     // Soft, non-blocking heads-up — see findDuplicateBusiness's doc comment
     // in lib/db/queries.ts. Never stops the signup itself; the real
     // enforcement is the trial-denial checks at checkout time (#1/#2).
-    // Only meaningful for a genuinely new signup, not the "reused" path
-    // (same email signing in again), which is just this same account.
-    const possibleDuplicate = reused
-      ? null
-      : await findDuplicateBusiness({
-          name: business.name,
-          city: business.city,
-          state: business.state,
-          excludeAccountId: account.id,
-        });
+    const possibleDuplicate = await findDuplicateBusiness({
+      name: business.name,
+      city: business.city,
+      state: business.state,
+      excludeAccountId: account.id,
+    });
 
-    if (!reused) {
-      await track("business_added", { accountId: account.id, businessId: business.id });
-      await track("trial_started", { accountId: account.id, businessId: business.id });
-      // "Onboarding" in this product IS the signup form — there's no separate
-      // wizard step, the dashboard is populated immediately after this. See
-      // docs/ARCHITECTURE.md for why that's intentional (no manual setup
-      // required beyond the one form).
-      await track("onboarding_completed", { accountId: account.id, businessId: business.id });
+    await track("business_added", { accountId: account.id, businessId: business.id });
+    await track("trial_started", { accountId: account.id, businessId: business.id });
+    // "Onboarding" in this product IS the signup form — there's no separate
+    // wizard step, the dashboard is populated immediately after this. See
+    // docs/ARCHITECTURE.md for why that's intentional (no manual setup
+    // required beyond the one form).
+    await track("onboarding_completed", { accountId: account.id, businessId: business.id });
 
-      // Fire-and-forget: a failed welcome email should never block signup.
-      try {
-        await sendWelcomeEmail({
-          businessId: business.id,
-          recipientEmail: parsed.data.email,
-          input: { businessName: business.name, dashboardUrl: new URL("/dashboard", req.url).toString() },
-        });
-      } catch (emailErr) {
-        console.error("Welcome email failed:", emailErr);
-      }
+    // Fire-and-forget: a failed welcome email should never block signup.
+    try {
+      await sendWelcomeEmail({
+        businessId: business.id,
+        recipientEmail: parsed.data.email,
+        input: { businessName: business.name, dashboardUrl: new URL("/dashboard", req.url).toString() },
+      });
+    } catch (emailErr) {
+      console.error("Welcome email failed:", emailErr);
+    }
 
-      // Run the analysis pipeline immediately so the dashboard is populated
-      // the moment the user lands on it — no manual "analyze" step required,
-      // per the core promise ("the customer should NOT need to do any manual
-      // analysis"). Cheap here because the DemoProvider makes no external
-      // API calls; with a live Claude key this still runs once per signup.
-      try {
-        const result = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
-        await track("analysis_completed", {
-          accountId: account.id,
-          businessId: business.id,
-          properties: { reviewsAnalyzed: result.reviewsNewlyAnalyzed },
-        });
-      } catch (analysisErr) {
-        // Signup should still succeed even if analysis fails — the dashboard
-        // will show an empty/error state and a retry button.
-        console.error("Initial analysis failed:", analysisErr);
-      }
+    // Run the analysis pipeline immediately so the dashboard is populated
+    // the moment the user lands on it — no manual "analyze" step required,
+    // per the core promise ("the customer should NOT need to do any manual
+    // analysis"). Cheap here because the DemoProvider makes no external
+    // API calls; with a live Claude key this still runs once per signup.
+    try {
+      const result = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
+      await track("analysis_completed", {
+        accountId: account.id,
+        businessId: business.id,
+        properties: { reviewsAnalyzed: result.reviewsNewlyAnalyzed },
+      });
+    } catch (analysisErr) {
+      // Signup should still succeed even if analysis fails — the dashboard
+      // will show an empty/error state and a retry button.
+      console.error("Initial analysis failed:", analysisErr);
     }
 
     return NextResponse.json({ ok: true, businessId: business.id, possibleDuplicate: Boolean(possibleDuplicate) });

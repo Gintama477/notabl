@@ -37,6 +37,13 @@ export function SignupForm() {
         setSubmitting(false);
         return;
       }
+      // That email already had an account — no session was started (see
+      // app/api/signup/route.ts). A magic link was sent instead; send the
+      // browser to the same "check your email" page /login uses.
+      if (data.redirectTo) {
+        router.push(data.redirectTo);
+        return;
+      }
       // Signup already succeeded (account/business created, session
       // started) by this point either way — this only decides whether to
       // redirect immediately or pause to show the heads-up first.
