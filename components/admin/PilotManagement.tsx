@@ -192,13 +192,21 @@ export function PilotToggleTable({ rows }: { rows: PilotRow[] }) {
 
   async function toggle(accountId: string, enabled: boolean) {
     setPending(accountId);
+    setMessage(null);
     try {
-      await fetch("/api/admin/pilot/toggle", {
+      const res = await fetch("/api/admin/pilot/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountId, enabled }),
       });
-      router.refresh();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMessage({ accountId, ok: false, text: data?.error?.formErrors?.[0] || data?.error || "Pilot toggle failed." });
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setMessage({ accountId, ok: false, text: "Pilot toggle failed. Please try again." });
     } finally {
       setPending(null);
     }

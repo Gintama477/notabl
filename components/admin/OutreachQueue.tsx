@@ -186,12 +186,19 @@ function ProspectRowItem({
     setMessage(null);
     try {
       // Save whatever's currently in the editor first, so Send always goes
-      // out with the admin's latest edits, not a stale saved draft.
-      await fetch("/api/admin/outreach/update-email", {
+      // out with the admin's latest edits, not a stale saved draft. If this
+      // fails, stop here rather than silently sending whatever was last
+      // saved (which could be an outdated email address or body).
+      const saveRes = await fetch("/api/admin/outreach/update-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prospectId: row.id, contactEmail, emailSubject: subject, emailBody: body }),
       });
+      if (!saveRes.ok) {
+        const saveData = await saveRes.json().catch(() => null);
+        setMessage(saveData?.error?.formErrors?.[0] || saveData?.error || "Could not save your edits — send cancelled.");
+        return;
+      }
       const res = await fetch("/api/admin/outreach/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -254,12 +261,19 @@ function ProspectRowItem({
     setBusy(true);
     setMessage(null);
     try {
-      await fetch("/api/admin/outreach/skip", {
+      const res = await fetch("/api/admin/outreach/skip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prospectId: row.id, reason }),
       });
-      onChanged();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMessage(data?.error?.formErrors?.[0] || data?.error || "Skip failed.");
+      } else {
+        onChanged();
+      }
+    } catch {
+      setMessage("Skip failed.");
     } finally {
       setBusy(false);
     }
