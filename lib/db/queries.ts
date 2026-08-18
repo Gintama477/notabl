@@ -256,7 +256,7 @@ export async function connectGoogleReviewSource(businessId: string, businessName
     throw new BusinessAlreadyClaimedError();
   }
 
-  let [source] = await db
+  const [existingSource] = await db
     .select()
     .from(reviewSources)
     .where(and(eq(reviewSources.businessId, businessId), eq(reviewSources.sourceType, "google")))
@@ -264,16 +264,34 @@ export async function connectGoogleReviewSource(businessId: string, businessName
 
   // Cost control: every call below re-fetches from Outscraper, a paid,
   // per-request API, with no cap. Only applies to re-syncing the SAME
-  // already-connected Place ID within the window — a changed Place ID (the
-  // branch below) or a genuinely first-time connect always goes through.
-  if (source && source.sourceUrl === placeId && source.lastSyncedAt) {
+  // already-connected Place ID within the window — a changed Place ID or a
+  // genuinely first-time connect always goes through.
+  if (existingSource && existingSource.sourceUrl === placeId && existingSource.lastSyncedAt) {
     const RESYNC_COOLDOWN_MS = 10 * 60 * 1000;
-    const msSinceLastSync = Date.now() - new Date(source.lastSyncedAt).getTime();
+    const msSinceLastSync = Date.now() - new Date(existingSource.lastSyncedAt).getTime();
     if (msSinceLastSync < RESYNC_COOLDOWN_MS) {
-      return { imported: 0, skipped: 0, sourceId: source.id, cooledDown: true };
+      return { imported: 0, skipped: 0, sourceId: existingSource.id, cooledDown: true };
     }
   }
 
+  // Fetched BEFORE anything about this business's stored state changes —
+  // if this throws (missing API key, Outscraper down, a malformed
+  // response, all things outscraperProvider.ts already checks for and
+  // throws on), the customer's demo dashboard is left exactly as it was,
+  // not already-deleted-and-now-nothing. This is also why the
+  // review_sources row itself is only created/updated below, AFTER a
+  // successful fetch: getDashboardData's hasDemoData check treats a
+  // "google" source's mere existence as "real data connected" (see that
+  // function), so confirming the row before knowing the fetch actually
+  // worked would make the dashboard call a still-fully-demo business
+  // "real" the moment a failed connect attempt was made. No db.transaction
+  // wrapping this together with the writes below on purpose: this is a
+  // slow external HTTP call, and holding a DB transaction open across it
+  // is worse practice than just not writing anything until there's real
+  // data to write.
+  const fetched = await getReviewDataProvider("google").fetchReviews({ businessName, sourceUrl: placeId });
+
+  let source = existingSource;
   if (!source) {
     [source] = await db
       .insert(reviewSources)
@@ -301,8 +319,6 @@ export async function connectGoogleReviewSource(businessId: string, businessName
   // no demo data left just deletes zero rows, harmless either way. Cascades
   // to review_theme_mentions via onDelete: "cascade" in schema.pg.ts.
   await db.delete(reviews).where(and(eq(reviews.businessId, businessId), eq(reviews.isDemoData, true)));
-
-  const fetched = await getReviewDataProvider("google").fetchReviews({ businessName, sourceUrl: placeId });
 
   let imported = 0;
   let skipped = 0;
