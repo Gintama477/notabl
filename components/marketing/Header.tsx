@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo } from "./Logo";
 import { TrackedCtaLink } from "./TrackedCtaLink";
 
 export function Header() {
@@ -6,9 +7,7 @@ export function Header() {
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded bg-teal-700 text-sm font-semibold text-white">
-            N
-          </span>
+          <Logo className="h-7 w-7" />
           <span className="font-serif text-lg font-semibold tracking-tight text-slate-900">
             Notabl
           </span>
