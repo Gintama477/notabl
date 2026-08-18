@@ -29,9 +29,11 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
   const sampleReviews = await getSampleReviewsForRun(business.id, report.periodStart, report.periodEnd);
   const { hasDemoData } = await getDashboardData(business.id);
   const subscription = await getSubscriptionForAccount(accountId);
-  // See the matching comment in app/dashboard/page.tsx — stripeSubscriptionId
-  // is the real "did checkout actually happen" signal, not subscription.status.
-  const hasStartedSubscription = subscription?.stripeSubscriptionId != null;
+  // See the matching comment in app/dashboard/page.tsx — based on
+  // subscription.status alone, not stripeSubscriptionId, which can be null
+  // on a genuinely trialing/active row (an incomplete reconciliation) and
+  // shouldn't be a second point of failure on top of status.
+  const hasStartedSubscription = subscription != null && subscription.status !== "none";
   const isActiveOrTrialing = subscription?.status === "active" || subscription?.status === "trialing";
   // Same gap this closes on the main dashboard (app/dashboard/page.tsx) —
   // without this, a canceled/past_due account could still view a real

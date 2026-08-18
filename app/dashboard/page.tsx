@@ -29,21 +29,21 @@ export default async function DashboardPage() {
 
   const data = await getDashboardData(business.id);
   const subscription = await getSubscriptionForAccount(accountId);
-  // stripeSubscriptionId is only ever set once a real Stripe checkout has
-  // actually completed (see the checkout.session.completed handler in
-  // app/api/billing/webhook/route.ts) — the more direct signal than
-  // subscription.status, which a signup now starts at "none" for anyway
-  // (see createAccountWithDemoBusiness in lib/db/queries.ts).
-  const hasStartedSubscription = subscription?.stripeSubscriptionId != null;
+  // Based on subscription.status alone — NOT stripeSubscriptionId. A row
+  // can genuinely have status "trialing"/"active" with stripeCustomerId/
+  // stripeSubscriptionId still null (e.g. a webhook that never landed, or
+  // any other incomplete reconciliation) — requiring that second field on
+  // top of status was pure fragility with no real benefit, and it's
+  // exactly what silently hid this whole flow for a real account before.
+  // A signup starts at status "none" (see createAccountWithDemoBusiness in
+  // lib/db/queries.ts), so "not none" already means a real checkout
+  // happened at some point, whether or not the record is fully populated.
+  const hasStartedSubscription = subscription != null && subscription.status !== "none";
   const isActiveOrTrialing = subscription?.status === "active" || subscription?.status === "trialing";
 
   // The one remaining gap between "subscribed" and "seeing your real
   // report" — a paying customer who hasn't connected Google reviews yet.
-  // Requires BOTH the real Stripe checkout signal and a currently-active
-  // status, so a canceled/past_due account (which can still carry an old
-  // stripeSubscriptionId) doesn't get invited to connect reviews it can no
-  // longer see.
-  const showConnectReviewsCard = hasStartedSubscription && isActiveOrTrialing && data.hasDemoData;
+  const showConnectReviewsCard = isActiveOrTrialing && data.hasDemoData;
 
   // Real review data is only ever shown to a currently active/trialing
   // subscription — a canceled or payment-failed account keeps its actual

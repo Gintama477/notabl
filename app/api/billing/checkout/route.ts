@@ -31,9 +31,20 @@ export async function POST(req: NextRequest) {
   // where Stripe lets them update the payment method and retry the SAME
   // subscription/invoice. Reserve fresh Checkout for accounts with no
   // live Stripe subscription at all (status "none" or "canceled").
-  const hasLiveSubscription =
-    subscription?.stripeSubscriptionId != null && subscription.status !== "none" && subscription.status !== "canceled";
-  if (hasLiveSubscription) {
+  //
+  // Based on status alone, NOT stripeSubscriptionId — a row can genuinely
+  // be "trialing"/"active" with stripeCustomerId/stripeSubscriptionId
+  // still null (an incomplete reconciliation), and requiring that second
+  // field was pure fragility. The portal branch below still separately
+  // checks subscription.stripeCustomerId before using it, though — that's
+  // a real technical requirement (you can't open a portal session for a
+  // Stripe customer that doesn't exist on file), not the same kind of
+  // fragile double-gating. A status-says-live-but-no-stripeCustomerId
+  // account instead falls through to a normal fresh checkout below, which
+  // doubles as another self-heal path alongside /billing's "Resync with
+  // Stripe" button (lib/billing/reconcile.ts).
+  const hasLiveSubscription = subscription != null && subscription.status !== "none" && subscription.status !== "canceled";
+  if (hasLiveSubscription && subscription.stripeCustomerId) {
     try {
       const { url } = await provider.createPortalSession({
         accountId,
