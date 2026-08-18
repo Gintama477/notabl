@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { findAndDraftProspects } from "@/lib/db/queries";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 const FindSchema = z.object({
   city: z.string().min(1).max(120),
@@ -29,6 +30,21 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   const authorized = await hasValidAdminSession();
   if (!authorized) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+
+  // Admin-gated, but still a real, billed Outscraper call with no cap
+  // otherwise — a leaked admin session (shared secret, no per-operator
+  // identity) could run these in a loop. Keyed by IP since there's no
+  // per-admin account id to key by.
+  const rateLimit = checkRateLimit(`admin-outreach-find:${getClientIp(req)}`, 10, 10 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many searches. Please try again later." },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+      }
+    );
+  }
 
   const body = await req.json().catch(() => null);
   const parsed = FindSchema.safeParse(body);

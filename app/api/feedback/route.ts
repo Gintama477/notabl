@@ -4,8 +4,21 @@ import { createFeedback } from "@/lib/db/queries";
 import { getSessionAccountId } from "@/lib/auth/session";
 import { track } from "@/lib/analytics/track";
 import { logAutomationError } from "@/lib/monitoring/logError";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  const rateLimit = checkRateLimit(`feedback:${ip}`, 5, 60 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many submissions. Please try again later." },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+      }
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const parsed = FeedbackSchema.safeParse(body);
   if (!parsed.success) {

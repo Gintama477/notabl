@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import { businesses } from "@/lib/db/schema.pg";
 import { eq } from "drizzle-orm";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 // Admin-only, one practice at a time — same pattern as
 // app/api/admin/pilot/invite. Connects (or re-syncs) a business's real
@@ -21,6 +22,22 @@ const ConnectSchema = z.object({
 export async function POST(req: NextRequest) {
   const authorized = await hasValidAdminSession();
   if (!authorized) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+
+  // Admin-gated, but still a real, billed Outscraper call with no other
+  // cap — a leaked admin session (shared secret, no per-operator identity)
+  // could otherwise run this in a loop. connectGoogleReviewSource's own
+  // 10-minute resync cooldown additionally stops a same-Place-ID resync
+  // from re-hitting Outscraper at all; this caps distinct attempts.
+  const rateLimit = checkRateLimit(`admin-connect-google:${getClientIp(req)}`, 10, 10 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many connection attempts. Please try again later." },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+      }
+    );
+  }
 
   const body = await req.json().catch(() => null);
   const parsed = ConnectSchema.safeParse(body);

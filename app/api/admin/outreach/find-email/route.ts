@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { findEmailForProspect } from "@/lib/db/queries";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 const FindEmailSchema = z.object({ prospectId: z.string().min(1) });
 
@@ -19,6 +20,20 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   const authorized = await hasValidAdminSession();
   if (!authorized) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+
+  // Same reasoning as app/api/admin/outreach/find/route.ts — admin-gated,
+  // but a leaked admin session could still loop a real, billed Outscraper
+  // call with no other cap.
+  const rateLimit = checkRateLimit(`admin-outreach-find-email:${getClientIp(req)}`, 10, 10 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many lookups. Please try again later." },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+      }
+    );
+  }
 
   const body = await req.json().catch(() => null);
   const parsed = FindEmailSchema.safeParse(body);

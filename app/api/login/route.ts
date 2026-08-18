@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { findAccountByEmail, getBusinessForAccount } from "@/lib/db/queries";
 import { sendMagicLoginLink, DEMO_LINK_COOKIE } from "@/lib/auth/sendMagicLink";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const LoginSchema = z.object({ email: z.string().email() });
 
@@ -20,7 +21,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.redirect(url, { status: 303 });
   }
 
-  const account = await findAccountByEmail(parsed.data.email);
+  // Keyed by email, not IP — the risk is mail-bombing one target inbox (or
+  // running up Resend volume) regardless of which IP(s) it comes from. Rate
+  // limited here means the send is silently skipped below (account stays
+  // null-equivalent for this request) but the response is identical either
+  // way, preserving the "can't be used to enumerate accounts" property.
+  const emailRateLimit = checkRateLimit(`login:${parsed.data.email.toLowerCase()}`, 5, 30 * 60 * 1000);
+
+  const account = emailRateLimit.allowed ? await findAccountByEmail(parsed.data.email) : null;
   let demoLoginUrl: string | undefined;
 
   if (account) {

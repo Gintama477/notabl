@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionAccountId } from "@/lib/auth/session";
 import { getBusinessForAccount, createSupportAppeal } from "@/lib/db/queries";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 // Session-gated. Backs the two "someone else may already have this
 // business" appeal flows — see BusinessAlreadyClaimedError and
@@ -18,6 +19,17 @@ const AppealSchema = z.object({
 export async function POST(req: NextRequest) {
   const accountId = await getSessionAccountId();
   if (!accountId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  const rateLimit = checkRateLimit(`support-appeal:${accountId}`, 5, 60 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many submissions. Please try again later." },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+      }
+    );
+  }
 
   const body = await req.json().catch(() => null);
   const parsed = AppealSchema.safeParse(body);

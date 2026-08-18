@@ -87,9 +87,9 @@ don't assume it's already been given).
 **Status:** built and working, confirmed by the owner. Field mapping was
 fixed against a real Outscraper `/maps/search-v3` response (the temporary
 `app/api/admin/outreach/debug-search` diagnostic route was used to confirm
-this — safe to delete now if not already gone) — `website`, `phone`,
-`address`, `city`, `state_code` all map correctly and display in the
-queue UI. **There is no email field anywhere in that API response** —
+this, then deleted — Aug 2026 audit found and removed it) — `website`,
+`phone`, `address`, `city`, `state_code` all map correctly and display in
+the queue UI. **There is no email field anywhere in that API response** —
 contact email is never auto-populated and must be typed in by hand for
 every prospect. This is a real data-source limitation, not a bug to keep
 chasing.
