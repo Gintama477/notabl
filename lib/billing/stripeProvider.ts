@@ -67,9 +67,18 @@ export class StripeBillingProvider implements BillingProvider {
     if (!stripeCustomerId) {
       throw new Error("No Stripe customer on file yet — start a checkout session first.");
     }
+    // Explicitly pins "cancel at period end" (not immediate) rather than
+    // trusting whatever the Dashboard's default Customer Portal setting
+    // currently happens to be — see scripts/setup-stripe-portal-cancel-config.ts
+    // for how this id gets created/patched, run once per Stripe mode.
+    // Falls back to the account's own current default configuration
+    // (today's behavior) when unset, so this is safe to deploy before
+    // that script has been run.
+    const configurationId = process.env.STRIPE_PORTAL_CONFIGURATION_ID;
     const session = await this.client.billingPortal.sessions.create({
       customer: stripeCustomerId,
       return_url: returnUrl,
+      ...(configurationId ? { configuration: configurationId } : {}),
     });
     return { url: session.url };
   }
