@@ -22,6 +22,7 @@ export class StripeBillingProvider implements BillingProvider {
     successUrl,
     cancelUrl,
     existingStripeCustomerId,
+    denyTrial,
   }: CheckoutParams): Promise<{ url: string }> {
     const priceId = PLANS[DEFAULT_PLAN].stripePriceId;
     if (!priceId) {
@@ -34,10 +35,14 @@ export class StripeBillingProvider implements BillingProvider {
     // this account has completed a real checkout before (even if since
     // canceled) — see app/api/billing/checkout/route.ts. In that case:
     // reuse the same Stripe customer (customer, not customer_email — Stripe
-    // would otherwise create a second customer record for the same person)
-    // and skip trial_period_days entirely, so a second checkout charges
-    // immediately instead of granting another free trial.
+    // would otherwise create a second customer record for the same person).
     const isReturningCustomer = Boolean(existingStripeCustomerId);
+
+    // One trial per business, too — denyTrial is separately true when a
+    // DIFFERENT account already trialed the same underlying business (see
+    // isPlaceIdAlreadyTrialedByAnotherAccount). Either signal skips
+    // trial_period_days entirely, so the checkout charges immediately.
+    const skipTrial = isReturningCustomer || Boolean(denyTrial);
 
     const session = await this.client.checkout.sessions.create({
       mode: "subscription",
@@ -45,7 +50,7 @@ export class StripeBillingProvider implements BillingProvider {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      ...(isReturningCustomer
+      ...(skipTrial
         ? {}
         : {
             subscription_data: {

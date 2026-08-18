@@ -14,6 +14,12 @@ export interface CheckoutParams {
   // subscription was later canceled) — see StripeBillingProvider for what
   // that changes about the session it creates.
   existingStripeCustomerId?: string | null;
+  // True when this account's own trial history says yes (existingStripeCustomerId
+  // set) OR when a DIFFERENT account already trialed the same underlying
+  // business — see isPlaceIdAlreadyTrialedByAnotherAccount in
+  // lib/db/queries.ts. Forces trial_period_days off even for an account
+  // that has never personally checked out before.
+  denyTrial?: boolean;
 }
 
 export interface PortalParams {

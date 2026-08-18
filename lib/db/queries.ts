@@ -194,6 +194,43 @@ export class BusinessAlreadyClaimedError extends Error {
 }
 
 /**
+ * Closes the "different email, same office" trial-abuse gap that a
+ * per-account check alone can't catch — see app/api/billing/checkout's use
+ * of this to decide whether to deny a NEW account's checkout a trial.
+ * True if this business has a connected Google review source (reviewSources
+ * row) whose Place ID some OTHER account's business is ALSO using, where
+ * that other account has ever had a real Stripe subscription
+ * (stripeCustomerId set — same robust "has this account had a subscription
+ * before" signal used for the per-account check). Only meaningful for a
+ * business that has actually connected a Google review source; one that
+ * hasn't has no real review data to exploit in the first place, so there's
+ * nothing to check.
+ */
+export async function isPlaceIdAlreadyTrialedByAnotherAccount(businessId: string): Promise<boolean> {
+  const [source] = await db
+    .select({ sourceUrl: reviewSources.sourceUrl })
+    .from(reviewSources)
+    .where(and(eq(reviewSources.businessId, businessId), eq(reviewSources.sourceType, "google")))
+    .limit(1);
+  if (!source?.sourceUrl) return false;
+
+  const otherAccountsOnSamePlaceId = await db
+    .select({ stripeCustomerId: subscriptions.stripeCustomerId })
+    .from(reviewSources)
+    .innerJoin(businesses, eq(reviewSources.businessId, businesses.id))
+    .innerJoin(subscriptions, eq(subscriptions.accountId, businesses.accountId))
+    .where(
+      and(
+        eq(reviewSources.sourceType, "google"),
+        eq(reviewSources.sourceUrl, source.sourceUrl),
+        ne(reviewSources.businessId, businessId)
+      )
+    );
+
+  return otherAccountsOnSamePlaceId.some((r) => r.stripeCustomerId != null);
+}
+
+/**
  * Shared by the admin connect form (app/api/admin/reviews/connect-google)
  * and the self-serve route (app/api/reviews/connect-google) — connects a
  * business's real Google reviews via the "google" review provider
