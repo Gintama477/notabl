@@ -36,7 +36,11 @@ export async function POST(req: NextRequest) {
     const { url } = await provider.createCheckoutSession({
       accountId,
       email: account.email,
-      successUrl: `${origin}/billing?checkout=success`,
+      // {CHECKOUT_SESSION_ID} is a literal Stripe placeholder it substitutes
+      // server-side — lets /billing's success state look the session up
+      // directly (see reconcileSubscriptionFromStripe) if the webhook
+      // hasn't landed yet by the time the browser gets here.
+      successUrl: `${origin}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${origin}/billing?checkout=cancelled`,
       // Non-null only if this account has completed a real checkout before
       // (even if later canceled) — see StripeBillingProvider for what that

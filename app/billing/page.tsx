@@ -7,6 +7,8 @@ import { Footer } from "@/components/marketing/Footer";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { PLANS, DEFAULT_PLAN, formatPrice } from "@/config/pricing";
 import { isLiveBillingEnabled } from "@/lib/billing/provider";
+import { StripeBillingProvider } from "@/lib/billing/stripeProvider";
+import { reconcileSubscriptionFromStripe } from "@/lib/billing/reconcile";
 
 const STATUS_LABELS: Record<string, string> = {
   none: "Not started",
@@ -19,15 +21,41 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string; cancelled?: string }>;
+  searchParams: Promise<{ checkout?: string; cancelled?: string; session_id?: string }>;
 }) {
   const accountId = await getSessionAccountId();
   if (!accountId) redirect("/signup");
 
-  const { checkout, cancelled } = await searchParams;
-  const subscription = await getSubscriptionForAccount(accountId);
-  const plan = PLANS[DEFAULT_PLAN];
+  const { checkout, cancelled, session_id } = await searchParams;
   const liveBilling = isLiveBillingEnabled();
+  let subscription = await getSubscriptionForAccount(accountId);
+  const plan = PLANS[DEFAULT_PLAN];
+
+  // Fallback for when the Stripe webhook hasn't landed yet by the time the
+  // customer's browser reaches this success page — reconcile directly with
+  // Stripe instead of showing a dashboard/billing page that doesn't know
+  // about the subscription yet. Only runs when there's actually a gap to
+  // close (no stripeSubscriptionId on file yet); once the webhook does
+  // land, this becomes a no-op (subscription is already up to date).
+  if (checkout === "success" && session_id && liveBilling && !subscription?.stripeSubscriptionId) {
+    try {
+      const provider = new StripeBillingProvider(process.env.STRIPE_SECRET_KEY as string);
+      const session = await provider.retrieveCheckoutSession(session_id);
+      const stripeSubscriptionId = typeof session.subscription === "string" ? session.subscription : null;
+      const stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
+      // Only ever reconcile onto the CURRENT logged-in account — never trust
+      // a session_id from the URL alone, since anyone could put a different
+      // (even someone else's) session id in the query string.
+      if (stripeSubscriptionId && session.metadata?.accountId === accountId) {
+        await reconcileSubscriptionFromStripe(accountId, stripeSubscriptionId, stripeCustomerId, provider);
+        subscription = await getSubscriptionForAccount(accountId);
+      }
+    } catch (err) {
+      // Non-fatal — the page still renders with whatever the DB already
+      // has; the real webhook will catch up on its own if this fails.
+      console.error("Checkout session reconciliation fallback failed:", err);
+    }
+  }
 
   return (
     <>

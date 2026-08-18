@@ -89,4 +89,16 @@ export class StripeBillingProvider implements BillingProvider {
   async retrieveSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
     return this.client.subscriptions.retrieve(subscriptionId);
   }
+
+  /**
+   * Used by app/billing/page.tsx's checkout=success fallback: the webhook
+   * that normally records a completed checkout is a separate, asynchronous
+   * call from Stripe that can land after the customer's browser is already
+   * on the success page. Retrieving the session directly lets that page
+   * reconcile immediately instead of showing nothing until the webhook
+   * eventually catches up.
+   */
+  async retrieveCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session> {
+    return this.client.checkout.sessions.retrieve(sessionId);
+  }
 }

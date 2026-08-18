@@ -14,6 +14,7 @@ import Stripe from "stripe";
 import { isLiveBillingEnabled } from "@/lib/billing/provider";
 import { StripeBillingProvider } from "@/lib/billing/stripeProvider";
 import { updateSubscriptionForAccount, getAccountIdByStripeCustomerId } from "@/lib/db/queries";
+import { reconcileSubscriptionFromStripe, mapStripeSubscriptionStatus } from "@/lib/billing/reconcile";
 import { track } from "@/lib/analytics/track";
 import { logAutomationError } from "@/lib/monitoring/logError";
 
@@ -63,20 +64,17 @@ async function handleStripeEvent(event: Stripe.Event, provider: StripeBillingPro
       const session = event.data.object as Stripe.Checkout.Session;
       const accountId = session.metadata?.accountId;
       const stripeSubscriptionId = typeof session.subscription === "string" ? session.subscription : null;
-      if (accountId) {
-        // The session itself only carries the subscription's ID, not its
-        // status — checkout.sessions.create sets trial_period_days (see
-        // lib/billing/stripeProvider.ts), so a brand-new subscription is
-        // genuinely "trialing" at this point, not "active". Retrieving it
-        // is what makes status/trialEndsAt here the real, Stripe-confirmed
-        // values rather than an assumption.
-        const stripeStatus = stripeSubscriptionId ? await provider.retrieveSubscription(stripeSubscriptionId) : null;
-        await updateSubscriptionForAccount(accountId, {
-          status: stripeStatus ? mapStripeSubscriptionStatus(stripeStatus.status) : "active",
-          stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
-          stripeSubscriptionId,
-          trialEndsAt: stripeStatus?.trial_end ? new Date(stripeStatus.trial_end * 1000).toISOString() : null,
-        });
+      const stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
+      if (accountId && stripeSubscriptionId) {
+        // Shared with app/billing/page.tsx's session_id fallback, for when
+        // the customer's browser reaches the success page before this
+        // webhook has landed — see lib/billing/reconcile.ts.
+        await reconcileSubscriptionFromStripe(accountId, stripeSubscriptionId, stripeCustomerId, provider);
+        await track("subscription_started", { accountId });
+      } else if (accountId) {
+        // No subscription id on the session somehow — still record the
+        // customer link rather than dropping the event entirely.
+        await updateSubscriptionForAccount(accountId, { status: "active", stripeCustomerId });
         await track("subscription_started", { accountId });
       }
       break;
@@ -121,17 +119,4 @@ async function handleStripeEvent(event: Stripe.Event, provider: StripeBillingPro
       // Ignore event types we don't act on.
       break;
   }
-}
-
-/**
- * Maps a Stripe subscription status onto our own status column. Only
- * trialing/active are translated by name; every other Stripe status
- * (incomplete, incomplete_expired, unpaid, paused, ...) passes through
- * as-is rather than being silently collapsed into one of our known values —
- * better to see an unfamiliar string in the admin panel than to mislabel it.
- */
-function mapStripeSubscriptionStatus(stripeStatus: Stripe.Subscription.Status): string {
-  if (stripeStatus === "trialing") return "trialing";
-  if (stripeStatus === "active") return "active";
-  return stripeStatus;
 }
