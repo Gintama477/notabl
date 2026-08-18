@@ -57,11 +57,20 @@ export function ConnectReviewsCard() {
         setSubmitting(false);
         return;
       }
-      setResult({
-        ok: true,
-        message: `Connected — imported ${data.imported} review${data.imported === 1 ? "" : "s"}. Refreshing your dashboard…`,
-      });
-      setTimeout(() => router.refresh(), 1500);
+      // cooledDown means connectGoogleReviewSource skipped re-fetching
+      // since this exact Place ID was synced within the last 10 minutes
+      // (see lib/db/queries.ts) — imported/skipped are both 0 in that case,
+      // which would otherwise misleadingly read as "found nothing."
+      setResult(
+        data.cooledDown
+          ? { ok: true, message: "This business was already synced within the last few minutes — try again shortly." }
+          : {
+              ok: true,
+              message: `Connected — imported ${data.imported} review${data.imported === 1 ? "" : "s"}. Refreshing your dashboard…`,
+            }
+      );
+      if (!data.cooledDown) setTimeout(() => router.refresh(), 1500);
+      else setSubmitting(false);
     } catch {
       setResult({ ok: false, message: "Connection failed. Please try again." });
       setSubmitting(false);

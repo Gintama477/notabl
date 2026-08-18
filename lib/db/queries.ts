@@ -262,6 +262,18 @@ export async function connectGoogleReviewSource(businessId: string, businessName
     .where(and(eq(reviewSources.businessId, businessId), eq(reviewSources.sourceType, "google")))
     .limit(1);
 
+  // Cost control: every call below re-fetches from Outscraper, a paid,
+  // per-request API, with no cap. Only applies to re-syncing the SAME
+  // already-connected Place ID within the window — a changed Place ID (the
+  // branch below) or a genuinely first-time connect always goes through.
+  if (source && source.sourceUrl === placeId && source.lastSyncedAt) {
+    const RESYNC_COOLDOWN_MS = 10 * 60 * 1000;
+    const msSinceLastSync = Date.now() - new Date(source.lastSyncedAt).getTime();
+    if (msSinceLastSync < RESYNC_COOLDOWN_MS) {
+      return { imported: 0, skipped: 0, sourceId: source.id, cooledDown: true };
+    }
+  }
+
   if (!source) {
     [source] = await db
       .insert(reviewSources)

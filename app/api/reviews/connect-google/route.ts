@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSessionAccountId } from "@/lib/auth/session";
 import { getBusinessForAccount, connectGoogleReviewSource, BusinessAlreadyClaimedError } from "@/lib/db/queries";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 // Self-serve, customer-facing equivalent of
 // app/api/admin/reviews/connect-google (kept as-is, still there as an
@@ -18,6 +19,22 @@ const ConnectSchema = z.object({ placeId: z.string().min(1) });
 export async function POST(req: NextRequest) {
   const accountId = await getSessionAccountId();
   if (!accountId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  // 5 per hour per account — same checkRateLimit pattern as /api/signup and
+  // /api/analysis/run (lib/rateLimit.ts). connectGoogleReviewSource's own
+  // cooldown (lastSyncedAt-based) additionally stops a same-Place-ID resync
+  // within 10 minutes from re-hitting Outscraper at all; this caps the
+  // number of DISTINCT attempts (e.g. re-typed Place IDs) per hour.
+  const rateLimit = checkRateLimit(`connect-google:${accountId}`, 5, 60 * 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many connection attempts. Please try again later." },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined,
+      }
+    );
+  }
 
   const business = await getBusinessForAccount(accountId);
   if (!business) return NextResponse.json({ error: "No business found for this account." }, { status: 404 });
