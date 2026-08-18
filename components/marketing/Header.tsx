@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "./Logo";
 import { TrackedCtaLink } from "./TrackedCtaLink";
+import { MobileMenu } from "./MobileMenu";
 import { getSessionAccountId } from "@/lib/auth/session";
 
 /**
@@ -18,7 +19,7 @@ export async function Header() {
   const loggedIn = accountId !== null;
 
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="relative border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-2">
           <Logo className="h-7 w-7" />
@@ -40,12 +41,15 @@ export async function Header() {
         <div className="flex items-center gap-3">
           {loggedIn ? (
             <form action="/api/logout" method="post">
-              <button type="submit" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:inline">
+              {/* md:inline, matching the nav's own breakpoint above — the
+                  mobile menu covers everything below md, so this and the
+                  nav appear/disappear together with no gap or overlap. */}
+              <button type="submit" className="hidden text-sm text-slate-600 hover:text-slate-900 md:inline">
                 Log Out
               </button>
             </form>
           ) : (
-            <Link href="/login" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:inline">
+            <Link href="/login" className="hidden text-sm text-slate-600 hover:text-slate-900 md:inline">
               Log In
             </Link>
           )}
@@ -64,6 +68,7 @@ export async function Header() {
               Analyze My Reviews
             </TrackedCtaLink>
           )}
+          <MobileMenu loggedIn={loggedIn} />
         </div>
       </div>
     </header>
