@@ -61,10 +61,13 @@ status in the database (visible in `/admin`'s Subscriptions table).
 
 Note: `lib/billing/stripeProvider.ts` sets `trial_period_days` on checkout
 (pulled from `PLANS[DEFAULT_PLAN].trialDays`), so a brand-new subscription
-shows status `trialing` with a ~14-day trial-end date immediately after a
+shows status `trialing` with a real trial-end date immediately after a
 successful checkout — that's expected, correct behavior, not a bug. It
 only becomes `active` after the trial period ends and the first real (in
-test mode, fake) charge succeeds.
+test mode, fake) charge succeeds. As of Aug 2026 this only ever happens
+once per account: a second checkout (stripeCustomerId already on file)
+skips the trial and charges immediately — see the one-trial-per-account
+note in `lib/billing/stripeProvider.ts`.
 
 This is still **test-mode only** — switching to real/live Stripe keys to
 accept actual money is a separate, deliberate step that needs its own

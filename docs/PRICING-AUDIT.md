@@ -1,7 +1,7 @@
 # Pricing Audit: Is $49/month Justified?
 
 This is a written audit only — **no pricing has been changed**. Current
-pricing lives in `config/pricing.ts`: $49/month, 14-day free trial, one plan,
+pricing lives in `config/pricing.ts`: $49/month, 7-day free trial (one per account — see the one-trial-per-account note in `lib/billing/stripeProvider.ts`), one plan,
 up to 1 business location.
 
 ## What supports $49/month

@@ -9,6 +9,11 @@ export interface CheckoutParams {
   email: string;
   successUrl: string;
   cancelUrl: string;
+  // Set only when this account has completed a real Stripe checkout before
+  // (their subscriptions row already has a stripeCustomerId, even if the
+  // subscription was later canceled) — see StripeBillingProvider for what
+  // that changes about the session it creates.
+  existingStripeCustomerId?: string | null;
 }
 
 export interface PortalParams {

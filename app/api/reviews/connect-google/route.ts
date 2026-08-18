@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionAccountId } from "@/lib/auth/session";
-import { getBusinessForAccount, connectGoogleReviewSource } from "@/lib/db/queries";
+import { getBusinessForAccount, connectGoogleReviewSource, BusinessAlreadyClaimedError } from "@/lib/db/queries";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 
 // Self-serve, customer-facing equivalent of
@@ -40,6 +40,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
+    if (err instanceof BusinessAlreadyClaimedError) {
+      // Expected, not a server error — the UI (ConnectReviewsCard) checks
+      // this specific code to show the appeal flow instead of a generic
+      // failure message.
+      return NextResponse.json({ error: err.message, code: "business_already_claimed" }, { status: 409 });
+    }
     console.error("connectGoogleReviewSource (self-serve) failed:", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Connection failed." }, { status: 500 });
   }

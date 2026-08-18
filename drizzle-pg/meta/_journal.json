@@ -8,6 +8,13 @@
       "when": 1786740499635,
       "tag": "0000_lush_deathbird",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787025595570,
+      "tag": "0001_wild_peter_parker",
+      "breakpoints": true
     }
   ]
 }

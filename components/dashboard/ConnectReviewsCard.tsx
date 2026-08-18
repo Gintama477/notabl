@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AppealForm } from "./AppealForm";
 
 const PLACE_ID_FINDER_URL = "https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder";
 
@@ -20,17 +21,25 @@ const PLACE_ID_FINDER_URL = "https://developers.google.com/maps/documentation/ja
  * the dashboard — a router.refresh() with hasDemoData now false makes the
  * parent stop rendering this card at all, so an instant refresh would cut
  * the confirmation off before anyone could read it.
+ *
+ * If the route reports the Place ID is already connected to a different
+ * business (BusinessAlreadyClaimedError, lib/db/queries.ts), this shows a
+ * distinct "already has a Notabl account" message with the shared
+ * AppealForm instead of a generic failure — that's the one error case
+ * where the honest next step is "talk to a human," not "try again."
  */
 export function ConnectReviewsCard() {
   const router = useRouter();
   const [placeId, setPlaceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [claimedByOther, setClaimedByOther] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setResult(null);
+    setClaimedByOther(false);
     try {
       const res = await fetch("/api/reviews/connect-google", {
         method: "POST",
@@ -39,6 +48,11 @@ export function ConnectReviewsCard() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === "business_already_claimed") {
+          setClaimedByOther(true);
+          setSubmitting(false);
+          return;
+        }
         setResult({ ok: false, message: data.error?.formErrors?.[0] || data.error || "Connection failed." });
         setSubmitting(false);
         return;
@@ -110,8 +124,15 @@ export function ConnectReviewsCard() {
                 {submitting ? "Connecting…" : "Connect"}
               </button>
             </form>
-            {result && (
-              <p className={`mt-2 text-sm ${result.ok ? "text-teal-800" : "text-red-700"}`}>{result.message}</p>
+            {claimedByOther ? (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-medium text-amber-900">This business already has a Notabl account.</p>
+                <div className="mt-2">
+                  <AppealForm appealType="business_already_claimed" />
+                </div>
+              </div>
+            ) : (
+              result && <p className={`mt-2 text-sm ${result.ok ? "text-teal-800" : "text-red-700"}`}>{result.message}</p>
             )}
           </div>
         </div>

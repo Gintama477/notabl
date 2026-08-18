@@ -78,6 +78,11 @@ export default async function AdminPage({
     };
   });
 
+  const APPEAL_TYPE_LABELS: Record<string, string> = {
+    business_already_claimed: "Google connect blocked (already claimed)",
+    duplicate_business_signup: "Duplicate business at signup",
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10">
       <div className="mx-auto max-w-5xl">
@@ -120,6 +125,31 @@ export default async function AdminPage({
               new Date(b.createdAt).toLocaleDateString(),
             ])}
           />
+        </Section>
+
+        <Section title={`Support Appeals (${data.supportAppeals.length})`}>
+          {data.supportAppeals.length === 0 ? (
+            <p className="p-4 text-sm text-slate-400">
+              No appeals filed — these show up when the &ldquo;already claimed&rdquo; block or the
+              duplicate-business signup notice gets a &ldquo;Contact Support&rdquo; submission. Needs a human
+              decision either way, nothing here is auto-resolved.
+            </p>
+          ) : (
+            <Table
+              columns={["Type", "Business", "Account", "Message", "Submitted"]}
+              rows={data.supportAppeals.map((a) => {
+                const account = data.accounts.find((acc) => acc.id === a.accountId);
+                const business = data.businesses.find((b) => b.id === a.businessId);
+                return [
+                  APPEAL_TYPE_LABELS[a.appealType] || a.appealType,
+                  business?.name ?? "—",
+                  account?.email ?? "—",
+                  a.message,
+                  new Date(a.createdAt).toLocaleString(),
+                ];
+              })}
+            />
+          )}
         </Section>
 
         <Section title="Connect Real Google Reviews">

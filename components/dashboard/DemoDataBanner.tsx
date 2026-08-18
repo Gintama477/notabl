@@ -13,7 +13,7 @@ import { PLANS, DEFAULT_PLAN } from "@/config/pricing";
  *
  * "first N days free" is accurate here again as of the subscription-
  * lifecycle fix in lib/db/queries.ts: a new signup now gets status "none"
- * with no trialEndsAt, so the real 14-day trial genuinely hasn't started
+ * with no trialEndsAt, so the real trial genuinely hasn't started
  * yet — it only begins once this CTA is clicked through and Stripe
  * confirms checkout completed.
  */

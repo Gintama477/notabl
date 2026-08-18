@@ -7,7 +7,7 @@ export const PLANS = {
     id: "notabl_pro",
     name: "Notabl Pro",
     priceMonthlyUsd: 49,
-    trialDays: 14,
+    trialDays: 7,
     features: [
       "Weekly automated review analysis",
       "Full dashboard: themes, trends, emerging issues",

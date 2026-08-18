@@ -346,3 +346,22 @@ export const feedback = pgTable("feedback", {
   whatWouldChangeToPay: text("what_would_change_to_pay"),
   createdAt: createdAt(),
 });
+
+// Human-review queue for the two "this might be someone else's business"
+// situations (see docs on connectGoogleReviewSource's already-claimed check
+// and createAccountWithDemoBusiness's duplicate-business check in
+// lib/db/queries.ts): a self-serve Google-connect blocked because another
+// account already claimed that Place ID, or a signup that looks like a
+// duplicate of an existing business by name+city/state. Deliberately just a
+// landing spot for a human to read and act on by hand — no automatic
+// resolution, since telling apart "legitimate new ownership" from
+// "someone connected a business they don't own" isn't a decision code
+// should make.
+export const supportAppeals = pgTable("support_appeals", {
+  id: id(),
+  accountId: text("account_id").references(() => accounts.id, { onDelete: "set null" }),
+  businessId: text("business_id").references(() => businesses.id, { onDelete: "set null" }),
+  appealType: text("appeal_type").notNull(), // "business_already_claimed" | "duplicate_business_signup"
+  message: text("message").notNull(),
+  createdAt: createdAt(),
+});

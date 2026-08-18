@@ -16,22 +16,42 @@ export class StripeBillingProvider implements BillingProvider {
     this.client = new Stripe(secretKey);
   }
 
-  async createCheckoutSession({ accountId, email, successUrl, cancelUrl }: CheckoutParams): Promise<{ url: string }> {
+  async createCheckoutSession({
+    accountId,
+    email,
+    successUrl,
+    cancelUrl,
+    existingStripeCustomerId,
+  }: CheckoutParams): Promise<{ url: string }> {
     const priceId = PLANS[DEFAULT_PLAN].stripePriceId;
     if (!priceId) {
       throw new Error(
         "STRIPE_SECRET_KEY is set but STRIPE_PRICE_ID_PRO is not — create the Notabl Pro price in your Stripe dashboard (test mode) and set STRIPE_PRICE_ID_PRO."
       );
     }
+
+    // One trial per account, ever. existingStripeCustomerId is only set once
+    // this account has completed a real checkout before (even if since
+    // canceled) — see app/api/billing/checkout/route.ts. In that case:
+    // reuse the same Stripe customer (customer, not customer_email — Stripe
+    // would otherwise create a second customer record for the same person)
+    // and skip trial_period_days entirely, so a second checkout charges
+    // immediately instead of granting another free trial.
+    const isReturningCustomer = Boolean(existingStripeCustomerId);
+
     const session = await this.client.checkout.sessions.create({
       mode: "subscription",
-      customer_email: email,
+      ...(isReturningCustomer ? { customer: existingStripeCustomerId as string } : { customer_email: email }),
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      subscription_data: {
-        trial_period_days: PLANS[DEFAULT_PLAN].trialDays,
-      },
+      ...(isReturningCustomer
+        ? {}
+        : {
+            subscription_data: {
+              trial_period_days: PLANS[DEFAULT_PLAN].trialDays,
+            },
+          }),
       metadata: { accountId },
     });
     if (!session.url) throw new Error("Stripe did not return a checkout URL");

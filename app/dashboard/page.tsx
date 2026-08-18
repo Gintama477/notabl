@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionAccountId } from "@/lib/auth/session";
-import { getBusinessForAccount, getDashboardData, getSubscriptionForAccount } from "@/lib/db/queries";
+import { getBusinessForAccount, getDashboardData, getSubscriptionForAccount, findDuplicateBusiness } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { DemoDataBanner } from "@/components/dashboard/DemoDataBanner";
 import { ConnectReviewsCard } from "@/components/dashboard/ConnectReviewsCard";
+import { DuplicateBusinessNotice } from "@/components/dashboard/DuplicateBusinessNotice";
 import { MetricsRow } from "@/components/dashboard/MetricsRow";
 import {
   WhatPatientsLove,
@@ -50,6 +51,13 @@ export default async function DashboardPage() {
   // demo data are unaffected either way.
   const subscriptionInactive = !data.hasDemoData && !isActiveOrTrialing;
 
+  const duplicateBusiness = await findDuplicateBusiness({
+    name: business.name,
+    city: business.city,
+    state: business.state,
+    excludeAccountId: accountId,
+  });
+
   await track("dashboard_viewed", { accountId, businessId: business.id });
 
   const topPositiveThemes = data.latestReport ? JSON.parse(data.latestReport.topPositiveThemesJson) : [];
@@ -63,6 +71,8 @@ export default async function DashboardPage() {
       {data.hasDemoData && <DemoDataBanner showSubscriptionCta={!hasStartedSubscription} />}
       <main className="flex-1 bg-slate-50 py-10">
         <div className="mx-auto max-w-6xl px-6">
+          {duplicateBusiness && <DuplicateBusinessNotice />}
+
           {showConnectReviewsCard && (
             <div className="mb-8">
               <ConnectReviewsCard />

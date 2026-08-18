@@ -17,8 +17,9 @@ import {
   emailDeliveries,
   feedback,
   prospects,
+  supportAppeals,
 } from "@/lib/db/schema.pg";
-import { eq, desc, and, gte } from "drizzle-orm";
+import { eq, desc, and, gte, ne, ilike } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
 import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
@@ -128,6 +129,37 @@ export async function createAccountWithDemoBusiness(input: SignupInput) {
 }
 
 /**
+ * "Same business, different account" duplicate-signup check (case-
+ * insensitive name + city + state) — backs the notice built in
+ * app/dashboard/page.tsx. Only runs when both city and state are present;
+ * an empty location on either side would make name-only matching too
+ * noisy (plenty of real, unrelated practices share a name). Deliberately
+ * advisory only — signup itself is never blocked by this, same "a human
+ * decides" approach as support_appeals (see schema.pg.ts) generally.
+ */
+export async function findDuplicateBusiness(opts: {
+  name: string;
+  city: string | null;
+  state: string | null;
+  excludeAccountId: string;
+}) {
+  if (!opts.city || !opts.state) return null;
+  const [dup] = await db
+    .select({ id: businesses.id })
+    .from(businesses)
+    .where(
+      and(
+        ilike(businesses.name, opts.name),
+        ilike(businesses.city, opts.city),
+        ilike(businesses.state, opts.state),
+        ne(businesses.accountId, opts.excludeAccountId)
+      )
+    )
+    .limit(1);
+  return dup ?? null;
+}
+
+/**
  * Admin-triggered pilot grant (point 18). Reuses the exact same
  * account/business/demo-review creation path as a normal signup — a pilot
  * account IS a normal account, just with isPilot=true on its subscription
@@ -147,17 +179,46 @@ export async function grantPilotAccess(input: SignupInput) {
 }
 
 /**
- * Admin-triggered: connects a business's real Google reviews via the
- * "google" review provider (currently Outscraper — a temporary, deliberate
- * stand-in for the official Business Profile API, see
- * docs/REVIEW-DATA-PROVIDERS.md) and imports whatever it returns as real,
- * non-demo data. Safely re-runnable: reuses the existing "google"
- * review_sources row for this business if one already exists, and
- * duplicate reviews are skipped by (reviewSourceId, externalReviewId) same
- * as every other import path — re-syncing the same practice just picks up
- * new reviews since the last sync.
+ * Thrown by connectGoogleReviewSource when the given Place ID is already
+ * connected to a DIFFERENT business — see the check at the top of that
+ * function. A distinct class (not a plain Error) so callers — currently
+ * app/api/reviews/connect-google (self-serve) — can distinguish "this
+ * specific, expected block" from any other connection failure and respond
+ * differently (offer the appeal flow) rather than showing a generic error.
+ */
+export class BusinessAlreadyClaimedError extends Error {
+  constructor(message = "This business has already been connected to another account.") {
+    super(message);
+    this.name = "BusinessAlreadyClaimedError";
+  }
+}
+
+/**
+ * Shared by the admin connect form (app/api/admin/reviews/connect-google)
+ * and the self-serve route (app/api/reviews/connect-google) — connects a
+ * business's real Google reviews via the "google" review provider
+ * (currently Outscraper — a temporary, deliberate stand-in for the official
+ * Business Profile API, see docs/REVIEW-DATA-PROVIDERS.md) and imports
+ * whatever it returns as real, non-demo data. Safely re-runnable: reuses
+ * the existing "google" review_sources row for this business if one
+ * already exists, and duplicate reviews are skipped by (reviewSourceId,
+ * externalReviewId) same as every other import path — re-syncing the same
+ * practice just picks up new reviews since the last sync.
  */
 export async function connectGoogleReviewSource(businessId: string, businessName: string, placeId: string) {
+  // One real business, one Place ID, ever — regardless of which account or
+  // email connects it. Without this, two different accounts (e.g. a
+  // second, unauthorized signup for the same practice) could both start
+  // real trials off the exact same underlying business.
+  const [claimedByOtherBusiness] = await db
+    .select({ businessId: reviewSources.businessId })
+    .from(reviewSources)
+    .where(and(eq(reviewSources.sourceType, "google"), eq(reviewSources.sourceUrl, placeId), ne(reviewSources.businessId, businessId)))
+    .limit(1);
+  if (claimedByOtherBusiness) {
+    throw new BusinessAlreadyClaimedError();
+  }
+
   let [source] = await db
     .select()
     .from(reviewSources)
@@ -316,6 +377,32 @@ export async function createFeedback(accountId: string | null, input: FeedbackIn
   return row;
 }
 
+/**
+ * Records a "someone else may already have this business" appeal — either
+ * the connect-flow block (BusinessAlreadyClaimedError above) or the
+ * duplicate-signup notice (findDuplicateBusiness above). See
+ * components/dashboard/AppealForm.tsx for the shared UI both cases use and
+ * app/admin/page.tsx's "Support Appeals" section for where these land.
+ * Purely a queue for a human to read — nothing here auto-resolves anything.
+ */
+export async function createSupportAppeal(input: {
+  accountId: string;
+  businessId: string | null;
+  appealType: string;
+  message: string;
+}) {
+  const [row] = await db
+    .insert(supportAppeals)
+    .values({
+      accountId: input.accountId,
+      businessId: input.businessId,
+      appealType: input.appealType,
+      message: input.message,
+    })
+    .returning();
+  return row;
+}
+
 export async function getAccountIdByStripeCustomerId(stripeCustomerId: string) {
   const [row] = await db
     .select({ accountId: subscriptions.accountId })
@@ -381,6 +468,7 @@ export async function getAdminOverview() {
   const allAutomationLogs = await db.select().from(automationLogs);
   const allEvents = await db.select().from(events);
   const allFeedback = await db.select().from(feedback).orderBy(desc(feedback.createdAt));
+  const allSupportAppeals = await db.select().from(supportAppeals).orderBy(desc(supportAppeals.createdAt));
 
   const planPrice = PLANS[DEFAULT_PLAN].priceMonthlyUsd;
   const activeOrTrialing = allSubscriptions.filter((s) => s.status === "active" || s.status === "trialing");
@@ -422,6 +510,7 @@ export async function getAdminOverview() {
     feedback: allFeedback,
     wouldPayPct,
     sampleReportViews,
+    supportAppeals: allSupportAppeals,
   };
 }
 
