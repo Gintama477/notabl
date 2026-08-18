@@ -1,6 +1,12 @@
 import { redirect, notFound } from "next/navigation";
 import { getSessionAccountId } from "@/lib/auth/session";
-import { getBusinessForAccount, getWeeklyReportById, getSampleReviewsForRun, getDashboardData } from "@/lib/db/queries";
+import {
+  getBusinessForAccount,
+  getWeeklyReportById,
+  getSampleReviewsForRun,
+  getDashboardData,
+  getSubscriptionForAccount,
+} from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { DemoDataBanner } from "@/components/dashboard/DemoDataBanner";
@@ -20,11 +26,13 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
 
   const sampleReviews = await getSampleReviewsForRun(business.id, report.periodStart, report.periodEnd);
   const { hasDemoData } = await getDashboardData(business.id);
+  const subscription = await getSubscriptionForAccount(accountId);
+  const hasStartedSubscription = subscription?.status === "active" || subscription?.status === "trialing";
 
   return (
     <>
       <Header />
-      {hasDemoData && <DemoDataBanner />}
+      {hasDemoData && <DemoDataBanner showSubscriptionCta={!hasStartedSubscription} />}
       <WeeklyReportView businessId={business.id} />
       <main className="flex-1 bg-slate-50 py-10">
         <div className="mx-auto max-w-3xl px-6">
