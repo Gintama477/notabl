@@ -20,6 +20,33 @@ export async function POST(req: NextRequest) {
   ]);
   if (!business || !account) return NextResponse.json({ error: "No business found" }, { status: 404 });
 
+  const provider = await getBillingProvider();
+  const origin = req.nextUrl.origin;
+
+  // A customer with an existing, not-fully-canceled Stripe subscription
+  // (e.g. past_due after a declined card, still open and being
+  // auto-retried by Stripe) must never get a SECOND subscription created
+  // on the same customer — that's exactly what happens if this route just
+  // calls checkout.sessions.create again. Send them to the portal instead,
+  // where Stripe lets them update the payment method and retry the SAME
+  // subscription/invoice. Reserve fresh Checkout for accounts with no
+  // live Stripe subscription at all (status "none" or "canceled").
+  const hasLiveSubscription =
+    subscription?.stripeSubscriptionId != null && subscription.status !== "none" && subscription.status !== "canceled";
+  if (hasLiveSubscription) {
+    try {
+      const { url } = await provider.createPortalSession({
+        accountId,
+        stripeCustomerId: subscription.stripeCustomerId,
+        returnUrl: `${origin}/billing`,
+      });
+      return NextResponse.redirect(url.startsWith("http") ? url : `${origin}${url}`, { status: 303 });
+    } catch (err) {
+      console.error("Portal session creation failed (checkout redirect path):", err);
+      return NextResponse.json({ error: "Could not open billing portal." }, { status: 500 });
+    }
+  }
+
   await track("checkout_started", { accountId, businessId: business.id });
 
   // Closes the "different email, same office" gap — see that function's
@@ -30,8 +57,6 @@ export async function POST(req: NextRequest) {
   // later. Still worth checking every time; it's cheap.
   const denyTrial = await isPlaceIdAlreadyTrialedByAnotherAccount(business.id);
 
-  const provider = await getBillingProvider();
-  const origin = req.nextUrl.origin;
   try {
     const { url } = await provider.createCheckoutSession({
       accountId,
