@@ -6,11 +6,9 @@
 
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { SESSION_SECRET_KEY as SECRET } from "./secret";
 
 const COOKIE_NAME = "notabl_session";
-const SECRET = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "dev-only-insecure-secret-change-in-production"
-);
 
 export async function createSession(accountId: string) {
   const token = await new SignJWT({ accountId })

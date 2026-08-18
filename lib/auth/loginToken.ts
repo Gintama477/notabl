@@ -11,10 +11,7 @@
 // the same way most passwordless SaaS products do.
 
 import { SignJWT, jwtVerify } from "jose";
-
-const SECRET = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "dev-only-insecure-secret-change-in-production"
-);
+import { SESSION_SECRET_KEY as SECRET } from "./secret";
 
 export async function createLoginToken(accountId: string, expiresIn: string = "15m"): Promise<string> {
   return new SignJWT({ accountId, purpose: "login" })

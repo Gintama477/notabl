@@ -9,11 +9,9 @@
 
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { SESSION_SECRET_KEY as SECRET } from "./secret";
 
 const COOKIE_NAME = "notabl_admin_session";
-const SECRET = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "dev-only-insecure-secret-change-in-production"
-);
 
 export async function createAdminSession() {
   const token = await new SignJWT({ admin: true })
