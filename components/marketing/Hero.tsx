@@ -48,7 +48,7 @@ export function Hero() {
 
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-lg shadow-slate-900/5 ring-1 ring-slate-900/5 sm:p-7">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              Example — Your Weekly Notabl
+              Example — Your Weekly Notabl Report
             </p>
             <p className="mt-1.5 font-serif text-lg font-semibold text-slate-900">
               Brightview Family Dental
