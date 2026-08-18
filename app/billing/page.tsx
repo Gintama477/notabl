@@ -109,7 +109,7 @@ export default async function BillingPage({
                     </button>
                   </form>
                 )}
-                {subscription?.status === "active" && (
+                {(subscription?.status === "active" || subscription?.status === "trialing") && (
                   <form action="/api/billing/portal" method="post">
                     <button className="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                       Manage Billing
