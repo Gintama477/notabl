@@ -7,6 +7,7 @@ import { PLANS, DEFAULT_PLAN, formatPrice } from "@/config/pricing";
 import { isLiveBillingEnabled } from "@/lib/billing/provider";
 
 const STATUS_LABELS: Record<string, string> = {
+  none: "Not started",
   trialing: "Trialing",
   active: "Active",
   past_due: "Payment failed",
@@ -88,7 +89,11 @@ export default async function BillingPage({
 
             {!subscription?.isPilot && (
               <div className="mt-6 flex flex-col gap-2">
-                {(!subscription || subscription.status === "trialing" || subscription.status === "past_due" || subscription.status === "canceled") && (
+                {(!subscription ||
+                  subscription.status === "none" ||
+                  subscription.status === "trialing" ||
+                  subscription.status === "past_due" ||
+                  subscription.status === "canceled") && (
                   <form action="/api/billing/checkout" method="post">
                     <button className="w-full rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800">
                       {subscription?.status === "past_due" ? "Retry Payment" : "Add Payment Method"}

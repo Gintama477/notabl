@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PLANS, DEFAULT_PLAN } from "@/config/pricing";
 
 /**
  * Combined disclosure + upsell bar. The "this is sample data" disclosure is
@@ -6,16 +7,17 @@ import Link from "next/link";
  * connected yet — see data.hasDemoData in app/dashboard/page.tsx, unchanged
  * by this component). The second-sentence CTA is conditional: the parent
  * passes showSubscriptionCta={false} once the account has actually
- * completed real Stripe checkout (stripeSubscriptionId set — NOT just
- * subscription.status === "trialing", which every account gets immediately
- * at signup regardless of real billing), and only the plain disclosure
- * sentence renders.
+ * completed real Stripe checkout (stripeSubscriptionId set), and only the
+ * plain disclosure sentence renders.
  *
- * Copy deliberately doesn't say "first N days free" here — that trial
- * clock starts at signup, not at the moment this CTA is clicked, so
- * promising a fresh N-day countdown right here would overstate what's left.
+ * "first N days free" is accurate here again as of the subscription-
+ * lifecycle fix in lib/db/queries.ts: a new signup now gets status "none"
+ * with no trialEndsAt, so the real 14-day trial genuinely hasn't started
+ * yet — it only begins once this CTA is clicked through and Stripe
+ * confirms checkout completed.
  */
 export function DemoDataBanner({ showSubscriptionCta }: { showSubscriptionCta: boolean }) {
+  const plan = PLANS[DEFAULT_PLAN];
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-center text-sm font-medium text-amber-800">
       This dashboard is showing sample data.
@@ -25,7 +27,7 @@ export function DemoDataBanner({ showSubscriptionCta }: { showSubscriptionCta: b
           <Link href="/billing" className="underline hover:text-amber-900">
             Click here to start your subscription
           </Link>{" "}
-          and see your real report before your trial ends.
+          and see your real report — first {plan.trialDays} days free.
         </>
       )}
     </div>

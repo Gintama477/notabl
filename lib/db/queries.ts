@@ -110,11 +110,18 @@ export async function createAccountWithDemoBusiness(input: SignupInput) {
     }))
   );
 
+  // "none" — not "trialing" — because no trial has actually started yet.
+  // The real trial (real status, real trialEndsAt) only begins once Stripe
+  // confirms checkout actually completed; see the checkout.session.completed
+  // handler in app/api/billing/webhook/route.ts. Setting "trialing" here
+  // used to make every signup look identical to a real paying trial in the
+  // billing page and admin counts, whether or not the account had ever
+  // touched real billing.
   await db.insert(subscriptions).values({
     accountId: account.id,
     planId: DEFAULT_PLAN,
-    status: "trialing",
-    trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    status: "none",
+    trialEndsAt: null,
   });
 
   return { account, business, reused: false };
@@ -324,6 +331,7 @@ export async function updateSubscriptionForAccount(
     status: string;
     stripeCustomerId: string | null;
     stripeSubscriptionId: string | null;
+    trialEndsAt: string | null;
     currentPeriodEnd: string | null;
     canceledAt: string | null;
     isPilot: boolean;

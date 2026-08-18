@@ -27,9 +27,8 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
   const sampleReviews = await getSampleReviewsForRun(business.id, report.periodStart, report.periodEnd);
   const { hasDemoData } = await getDashboardData(business.id);
   const subscription = await getSubscriptionForAccount(accountId);
-  // See the matching comment in app/dashboard/page.tsx — status is
-  // "trialing" for every account from signup on, real or not;
-  // stripeSubscriptionId is the actual "did real Stripe checkout happen" signal.
+  // See the matching comment in app/dashboard/page.tsx — stripeSubscriptionId
+  // is the real "did checkout actually happen" signal, not subscription.status.
   const hasStartedSubscription = subscription?.stripeSubscriptionId != null;
 
   return (

@@ -252,7 +252,15 @@ export const subscriptions = pgTable("subscriptions", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   planId: text("plan_id").notNull().default("notabl_pro"),
-  status: text("status").notNull().default("trialing"),
+  // Column default matches the intended insert-time default in
+  // createAccountWithDemoBusiness (lib/db/queries.ts) — "none" until Stripe
+  // confirms real checkout completed. That function always passes status
+  // explicitly, so this default is only a safety net for any future insert
+  // that doesn't; it existing as "trialing" was the same bug in one more
+  // place. NOTE: changing this TS default does not retroactively alter the
+  // column default already applied to the live Postgres database — that
+  // needs its own migration/ALTER TABLE, deliberately not run here.
+  status: text("status").notNull().default("none"),
   trialEndsAt: text("trial_ends_at"),
   currentPeriodEnd: text("current_period_end"),
   createdAt: createdAt(),

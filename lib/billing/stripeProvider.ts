@@ -53,4 +53,15 @@ export class StripeBillingProvider implements BillingProvider {
   constructEvent(payload: string | Buffer, signature: string, webhookSecret: string): Stripe.Event {
     return this.client.webhooks.constructEvent(payload, signature, webhookSecret);
   }
+
+  /**
+   * Used by the webhook route's checkout.session.completed handler to learn
+   * the real status (trialing vs active — trial_period_days means a brand
+   * new subscription is genuinely "trialing", not "active") and the real
+   * trial_end for the subscription that checkout just created. The session
+   * object itself only carries the subscription's ID, not its status.
+   */
+  async retrieveSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    return this.client.subscriptions.retrieve(subscriptionId);
+  }
 }

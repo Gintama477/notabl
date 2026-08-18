@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await handleStripeEvent(event);
+    await handleStripeEvent(event, provider);
   } catch (err) {
     console.error("Stripe webhook processing failed:", err);
     await logAutomationError("stripe-webhook", `Failed processing ${event.type} (event ${event.id}): ${String(err)}`);
@@ -57,16 +57,25 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function handleStripeEvent(event: Stripe.Event): Promise<void> {
+async function handleStripeEvent(event: Stripe.Event, provider: StripeBillingProvider): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       const accountId = session.metadata?.accountId;
+      const stripeSubscriptionId = typeof session.subscription === "string" ? session.subscription : null;
       if (accountId) {
+        // The session itself only carries the subscription's ID, not its
+        // status — checkout.sessions.create sets trial_period_days (see
+        // lib/billing/stripeProvider.ts), so a brand-new subscription is
+        // genuinely "trialing" at this point, not "active". Retrieving it
+        // is what makes status/trialEndsAt here the real, Stripe-confirmed
+        // values rather than an assumption.
+        const stripeStatus = stripeSubscriptionId ? await provider.retrieveSubscription(stripeSubscriptionId) : null;
         await updateSubscriptionForAccount(accountId, {
-          status: "active",
+          status: stripeStatus ? mapStripeSubscriptionStatus(stripeStatus.status) : "active",
           stripeCustomerId: typeof session.customer === "string" ? session.customer : null,
-          stripeSubscriptionId: typeof session.subscription === "string" ? session.subscription : null,
+          stripeSubscriptionId,
+          trialEndsAt: stripeStatus?.trial_end ? new Date(stripeStatus.trial_end * 1000).toISOString() : null,
         });
         await track("subscription_started", { accountId });
       }
@@ -78,7 +87,7 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       const accountId = customerId ? await getAccountIdByStripeCustomerId(customerId) : null;
       if (accountId) {
         await updateSubscriptionForAccount(accountId, {
-          status: sub.status === "trialing" ? "trialing" : sub.status === "active" ? "active" : sub.status,
+          status: mapStripeSubscriptionStatus(sub.status),
           currentPeriodEnd: sub.items.data[0]?.current_period_end
             ? new Date(sub.items.data[0].current_period_end * 1000).toISOString()
             : null,
@@ -112,4 +121,17 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
       // Ignore event types we don't act on.
       break;
   }
+}
+
+/**
+ * Maps a Stripe subscription status onto our own status column. Only
+ * trialing/active are translated by name; every other Stripe status
+ * (incomplete, incomplete_expired, unpaid, paused, ...) passes through
+ * as-is rather than being silently collapsed into one of our known values —
+ * better to see an unfamiliar string in the admin panel than to mislabel it.
+ */
+function mapStripeSubscriptionStatus(stripeStatus: Stripe.Subscription.Status): string {
+  if (stripeStatus === "trialing") return "trialing";
+  if (stripeStatus === "active") return "active";
+  return stripeStatus;
 }
