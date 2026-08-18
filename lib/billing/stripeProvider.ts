@@ -101,4 +101,19 @@ export class StripeBillingProvider implements BillingProvider {
   async retrieveCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session> {
     return this.client.checkout.sessions.retrieve(sessionId);
   }
+
+  /**
+   * Used by the admin "Cancel Subscription" button (app/api/admin/
+   * subscription/cancel). Deliberately cancel_at_period_end: true, NOT an
+   * immediate cancel — Stripe keeps the subscription's status as
+   * trialing/active right up until the period genuinely ends, at which
+   * point it fires customer.subscription.deleted and the existing webhook
+   * handler flips our own status to "canceled" then. That one flag is what
+   * makes "cancel now, keep working until the period ends" correct with no
+   * extra app-side logic — do NOT call cancel() / del() here, which would
+   * cut the customer off immediately instead.
+   */
+  async cancelAtPeriodEnd(subscriptionId: string): Promise<Stripe.Subscription> {
+    return this.client.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+  }
 }

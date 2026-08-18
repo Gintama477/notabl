@@ -76,6 +76,10 @@ export default async function AdminPage({
       email: a.email,
       businessName: business?.name ?? "—",
       isPilot: subscription?.isPilot ?? false,
+      subscriptionStatus: subscription?.status ?? "none",
+      canCancel: Boolean(
+        subscription?.stripeSubscriptionId && subscription.status !== "none" && subscription.status !== "canceled"
+      ),
     };
   });
 

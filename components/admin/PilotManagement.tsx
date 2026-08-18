@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export type PilotRow = {
@@ -8,6 +8,14 @@ export type PilotRow = {
   email: string;
   businessName: string;
   isPilot: boolean;
+  subscriptionStatus: string;
+  // True only when there's a real, live Stripe subscription to actually
+  // cancel (stripeSubscriptionId set, status not already "none"/"canceled").
+  // A record stuck with a live-looking status but no stripeSubscriptionId
+  // (an incomplete reconciliation) has to be fixed via /billing's "Resync
+  // with Stripe" button first — the admin cancel button intentionally
+  // doesn't try to work around that here.
+  canCancel: boolean;
 };
 
 export function PilotInviteForm() {
@@ -180,6 +188,7 @@ export function ConnectGoogleReviewsForm({ businesses }: { businesses: Connectab
 export function PilotToggleTable({ rows }: { rows: PilotRow[] }) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ accountId: string; ok: boolean; text: string } | null>(null);
 
   async function toggle(accountId: string, enabled: boolean) {
     setPending(accountId);
@@ -195,6 +204,42 @@ export function PilotToggleTable({ rows }: { rows: PilotRow[] }) {
     }
   }
 
+  /**
+   * Cancels at the end of the current billing period (see
+   * app/api/admin/subscription/cancel — it deliberately never sets status
+   * to "canceled" itself), so the account keeps working right up until
+   * Stripe's own customer.subscription.deleted event flips it for real.
+   */
+  async function cancelSubscription(accountId: string, businessName: string) {
+    if (
+      !confirm(
+        `Cancel ${businessName}'s subscription at the end of their current billing period? They'll keep access until then, then it turns off automatically — this is not immediate.`
+      )
+    ) {
+      return;
+    }
+    setPending(accountId);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/subscription/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage({ accountId, ok: false, text: data.error?.formErrors?.[0] || data.error || "Cancel failed." });
+      } else {
+        setMessage({ accountId, ok: true, text: "Cancellation scheduled for the end of the billing period." });
+        router.refresh();
+      }
+    } catch {
+      setMessage({ accountId, ok: false, text: "Cancel failed. Please try again." });
+    } finally {
+      setPending(null);
+    }
+  }
+
   if (rows.length === 0) {
     return <p className="p-4 text-sm text-slate-400">No accounts yet.</p>;
   }
@@ -205,26 +250,48 @@ export function PilotToggleTable({ rows }: { rows: PilotRow[] }) {
         <tr>
           <th className="px-4 py-2 font-medium">Practice</th>
           <th className="px-4 py-2 font-medium">Email</th>
+          <th className="px-4 py-2 font-medium">Subscription</th>
           <th className="px-4 py-2 font-medium">Pilot</th>
           <th className="px-4 py-2 font-medium"></th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.accountId} className="border-b border-slate-100 last:border-0">
-            <td className="px-4 py-2 text-slate-700">{r.businessName}</td>
-            <td className="px-4 py-2 text-slate-700">{r.email}</td>
-            <td className="px-4 py-2 text-slate-700">{r.isPilot ? "Yes" : "No"}</td>
-            <td className="px-4 py-2">
-              <button
-                onClick={() => toggle(r.accountId, !r.isPilot)}
-                disabled={pending === r.accountId}
-                className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-              >
-                {r.isPilot ? "Revoke Pilot" : "Grant Pilot"}
-              </button>
-            </td>
-          </tr>
+          <Fragment key={r.accountId}>
+            <tr className="border-b border-slate-100 last:border-0">
+              <td className="px-4 py-2 text-slate-700">{r.businessName}</td>
+              <td className="px-4 py-2 text-slate-700">{r.email}</td>
+              <td className="px-4 py-2 text-slate-700">{r.subscriptionStatus}</td>
+              <td className="px-4 py-2 text-slate-700">{r.isPilot ? "Yes" : "No"}</td>
+              <td className="px-4 py-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => toggle(r.accountId, !r.isPilot)}
+                    disabled={pending === r.accountId}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {r.isPilot ? "Revoke Pilot" : "Grant Pilot"}
+                  </button>
+                  {r.canCancel && (
+                    <button
+                      onClick={() => cancelSubscription(r.accountId, r.businessName)}
+                      disabled={pending === r.accountId}
+                      className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      Cancel Subscription
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+            {message?.accountId === r.accountId && (
+              <tr className="border-b border-slate-100 last:border-0">
+                <td colSpan={5} className={`px-4 pb-2 text-xs ${message.ok ? "text-teal-800" : "text-red-700"}`}>
+                  {message.text}
+                </td>
+              </tr>
+            )}
+          </Fragment>
         ))}
       </tbody>
     </table>
