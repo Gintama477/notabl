@@ -26,7 +26,12 @@ export default async function DashboardPage() {
 
   const data = await getDashboardData(business.id);
   const subscription = await getSubscriptionForAccount(accountId);
-  const hasStartedSubscription = subscription?.status === "active" || subscription?.status === "trialing";
+  // NOT subscription.status === "trialing" — every account gets that status
+  // immediately at signup (see createAccountWithDemoBusiness in
+  // lib/db/queries.ts), whether or not they've ever touched real Stripe
+  // billing. stripeSubscriptionId is only ever set once a real Stripe
+  // checkout has actually completed, so it's the real signal here.
+  const hasStartedSubscription = subscription?.stripeSubscriptionId != null;
   await track("dashboard_viewed", { accountId, businessId: business.id });
 
   const topPositiveThemes = data.latestReport ? JSON.parse(data.latestReport.topPositiveThemesJson) : [];
