@@ -21,12 +21,12 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string; cancelled?: string; session_id?: string }>;
+  searchParams: Promise<{ checkout?: string; cancelled?: string; session_id?: string; resync?: string }>;
 }) {
   const accountId = await getSessionAccountId();
   if (!accountId) redirect("/signup");
 
-  const { checkout, cancelled, session_id } = await searchParams;
+  const { checkout, cancelled, session_id, resync } = await searchParams;
   const liveBilling = isLiveBillingEnabled();
   let subscription = await getSubscriptionForAccount(accountId);
   const plan = PLANS[DEFAULT_PLAN];
@@ -93,6 +93,22 @@ export default async function BillingPage({
               Subscription cancelled{!liveBilling ? " (simulated)" : ""}.
             </div>
           )}
+          {resync === "success" && (
+            <div className="mt-4 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
+              Resynced with Stripe — your subscription details below should now be up to date.
+            </div>
+          )}
+          {resync === "notfound" && (
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+              Couldn&apos;t find a matching Stripe customer/subscription for this account&apos;s email. If you
+              believe you have a real subscription, contact support.
+            </div>
+          )}
+          {(resync === "failed" || resync === "unavailable") && (
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+              Resync failed. Please try again, or contact support if this keeps happening.
+            </div>
+          )}
 
           <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Current plan</p>
@@ -122,6 +138,26 @@ export default async function BillingPage({
               <p className="mt-2 text-xs text-slate-500">
                 Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString()}.
               </p>
+            )}
+
+            {/* Self-heal path for a subscription row stuck with a real
+                status but no stripeCustomerId — an incomplete
+                reconciliation (e.g. a webhook that never landed). Status
+                alone already means a real checkout happened at some
+                point; missing stripeCustomerId on top of that is the
+                broken state, not a normal one. */}
+            {!subscription?.isPilot && subscription && subscription.status !== "none" && !subscription.stripeCustomerId && (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs text-amber-900">
+                  Your subscription record looks incomplete — this can happen if Stripe&apos;s confirmation
+                  didn&apos;t fully sync.
+                </p>
+                <form action="/api/billing/resync" method="post" className="mt-2">
+                  <button className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100">
+                    Resync with Stripe
+                  </button>
+                </form>
+              </div>
             )}
 
             {!subscription?.isPilot &&

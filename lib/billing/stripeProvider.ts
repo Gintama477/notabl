@@ -125,4 +125,29 @@ export class StripeBillingProvider implements BillingProvider {
   async cancelAtPeriodEnd(subscriptionId: string): Promise<Stripe.Subscription> {
     return this.client.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
   }
+
+  /**
+   * Used by app/api/billing/resync — the "Resync with Stripe" self-heal
+   * button on /billing for exactly the stuck-record situation this whole
+   * fix set exists for: a subscription row with a real status but no
+   * stripeCustomerId (an incomplete reconciliation, e.g. a webhook that
+   * never landed). Looks the customer up by email rather than any local
+   * id, since that's the one thing we know connects the account to Stripe
+   * even when everything else is missing.
+   */
+  async findCustomerByEmail(email: string): Promise<Stripe.Customer | null> {
+    const result = await this.client.customers.list({ email, limit: 1 });
+    return result.data[0] ?? null;
+  }
+
+  /**
+   * Most recent subscription for a Stripe customer, any status — used
+   * alongside findCustomerByEmail by the resync flow above. status: "all"
+   * because the stuck record we're trying to fix could in principle
+   * correspond to a subscription in any state, not just active/trialing.
+   */
+  async findMostRecentSubscriptionForCustomer(customerId: string): Promise<Stripe.Subscription | null> {
+    const result = await this.client.subscriptions.list({ customer: customerId, status: "all", limit: 1 });
+    return result.data[0] ?? null;
+  }
 }
