@@ -2,13 +2,14 @@ import Link from "next/link";
 import { PLANS, DEFAULT_PLAN } from "@/config/pricing";
 
 /**
- * Combined disclosure + upsell bar. The "this is sample data" disclosure is
- * non-negotiable (shown whenever the parent decides real reviews aren't
- * connected yet — see data.hasDemoData in app/dashboard/page.tsx, unchanged
- * by this component). The second-sentence CTA is conditional: the parent
- * passes showSubscriptionCta={false} once the account has actually
- * completed real Stripe checkout (stripeSubscriptionId set), and only the
- * plain disclosure sentence renders.
+ * Combined disclosure + upsell bar. The "you're viewing example reviews"
+ * disclosure is non-negotiable (shown whenever the parent decides real
+ * reviews aren't connected yet — see data.hasDemoData in
+ * app/dashboard/page.tsx, unchanged by this component). The second-sentence
+ * CTA is conditional: the parent passes showSubscriptionCta={false} once
+ * the account has actually completed real Stripe checkout
+ * (stripeSubscriptionId set), and only the plain disclosure sentence
+ * renders.
  *
  * "first N days free" is accurate here again as of the subscription-
  * lifecycle fix in lib/db/queries.ts: a new signup now gets status "none"
@@ -20,7 +21,7 @@ export function DemoDataBanner({ showSubscriptionCta }: { showSubscriptionCta: b
   const plan = PLANS[DEFAULT_PLAN];
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-center text-sm font-medium text-amber-800">
-      This dashboard is showing sample data.
+      You&apos;re viewing example reviews, not your practice&apos;s real data.
       {showSubscriptionCta && (
         <>
           {" "}
