@@ -8,6 +8,7 @@ import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { sendWelcomeEmail } from "@/lib/email/send";
 import { logAutomationError } from "@/lib/monitoring/logError";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 export async function POST(req: NextRequest) {
   // 5 signups per 30 minutes per IP — generous for a real user (who signs up
@@ -48,11 +49,16 @@ export async function POST(req: NextRequest) {
     // Route through the same "prove you control this inbox" flow instead.
     if (reused) {
       await track("signup_attempted_existing_email", { accountId: account.id, businessId: business.id });
+      // Fixed site address — same reasoning as /api/login/route.ts. Not in
+      // the original bug report's list, but the exact same class of issue
+      // (found while fixing the listed ones): this magic link goes into an
+      // email too, and shouldn't point at whatever URL the visitor
+      // happened to sign up from.
       const { demoLoginUrl } = await sendMagicLoginLink({
         accountId: account.id,
         businessId: business.id,
         recipientEmail: parsed.data.email,
-        origin: req.nextUrl.origin,
+        origin: getSiteUrl(),
       });
 
       const res = NextResponse.json({ ok: true, redirectTo: "/login/check-email" });
@@ -94,7 +100,7 @@ export async function POST(req: NextRequest) {
       await sendWelcomeEmail({
         businessId: business.id,
         recipientEmail: parsed.data.email,
-        input: { businessName: business.name, dashboardUrl: new URL("/dashboard", req.url).toString() },
+        input: { businessName: business.name, dashboardUrl: new URL("/dashboard", getSiteUrl()).toString() },
       });
     } catch (emailErr) {
       console.error("Welcome email failed:", emailErr);

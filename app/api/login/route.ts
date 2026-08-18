@@ -3,6 +3,7 @@ import { z } from "zod";
 import { findAccountByEmail, getBusinessForAccount } from "@/lib/db/queries";
 import { sendMagicLoginLink, DEMO_LINK_COOKIE } from "@/lib/auth/sendMagicLink";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 const LoginSchema = z.object({ email: z.string().email() });
 
@@ -34,11 +35,15 @@ export async function POST(req: NextRequest) {
   if (account) {
     const business = await getBusinessForAccount(account.id);
     if (business) {
+      // Fixed site address, not the request's own origin — this link goes
+      // into an email that could be opened minutes or days later, from any
+      // device; it must never point at whatever preview/dev URL happened
+      // to be loaded when the email was requested. See lib/siteUrl.ts.
       const result = await sendMagicLoginLink({
         accountId: account.id,
         businessId: business.id,
         recipientEmail: parsed.data.email,
-        origin: req.nextUrl.origin,
+        origin: getSiteUrl(),
       });
       demoLoginUrl = result.demoLoginUrl;
     }

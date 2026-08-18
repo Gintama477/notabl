@@ -8,6 +8,7 @@ import { getSessionAccountId } from "@/lib/auth/session";
 import { getBusinessForAccount, getLatestWeeklyReport, getThemeRollupsForRun, getSampleBusiness } from "@/lib/db/queries";
 import { buildWeeklyReportEmailHtml } from "@/lib/email/templates/weeklyReportEmail";
 import { buildEmailInputFromReport } from "@/lib/email/buildEmailInput";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 export async function GET(req: NextRequest) {
   const useSample = req.nextUrl.searchParams.get("sample") === "1";
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
   if (!report) return NextResponse.json({ error: "No weekly report yet for this business" }, { status: 404 });
 
   const rollups = await getThemeRollupsForRun(report.analysisRunId);
-  const input = buildEmailInputFromReport(business.name, `${req.nextUrl.origin}/dashboard`, report, rollups);
+  const input = buildEmailInputFromReport(business.name, `${getSiteUrl()}/dashboard`, report, rollups);
   const html = buildWeeklyReportEmailHtml(input);
 
   return new NextResponse(html, { headers: { "Content-Type": "text/html" } });

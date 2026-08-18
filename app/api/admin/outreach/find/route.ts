@@ -3,6 +3,7 @@ import { z } from "zod";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { findAndDraftProspects } from "@/lib/db/queries";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 const FindSchema = z.object({
   city: z.string().min(1).max(120),
@@ -53,7 +54,12 @@ export async function POST(req: NextRequest) {
   }
 
   const senderName = process.env.OUTREACH_SENDER_NAME || "Notabl";
-  const sampleReportUrl = new URL("/sample-report", req.url).toString();
+  // Fixed site address, not req.url — this link gets drafted directly into
+  // a cold-outreach email that may sit unsent for a while and, once sent,
+  // goes to a prospect who has no idea what URL the admin happened to be
+  // using when they ran the search. Same class of bug as the emailed
+  // login/invite links.
+  const sampleReportUrl = new URL("/sample-report", getSiteUrl()).toString();
 
   try {
     const result = await findAndDraftProspects({

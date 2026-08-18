@@ -6,6 +6,7 @@ import { createLoginToken } from "@/lib/auth/loginToken";
 import { sendPilotInviteEmail } from "@/lib/email/send";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { track } from "@/lib/analytics/track";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 const InviteSchema = z.object({
   businessName: z.string().min(2).max(120),
@@ -49,7 +50,10 @@ export async function POST(req: NextRequest) {
   // Longer-lived than a regular self-requested login link (15m) — this one
   // sits in someone's inbox unsolicited, they might not open it right away.
   const token = await createLoginToken(account.id, "7d");
-  const loginUrl = new URL(`/api/login/verify?token=${token}`, req.url).toString();
+  // Fixed site address, not req.url — this sits unsolicited in someone's
+  // inbox for up to 7 days; it must point at the real site regardless of
+  // which URL the admin happened to be sending the invite from.
+  const loginUrl = new URL(`/api/login/verify?token=${token}`, getSiteUrl()).toString();
 
   const result = await sendPilotInviteEmail({
     businessId: business.id,
