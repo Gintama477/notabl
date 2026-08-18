@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-// Session-gated pages (dashboard, billing, and their subpaths) must never
-// be served from the browser's local cache. Without this, logging out and
+// Session-gated pages (dashboard, billing, admin, and their subpaths) must
+// never be served from the browser's local cache. Without this, logging out and
 // then hitting the browser's Back button can restore a stale, still-
 // logged-in-looking snapshot of one of these pages straight from the
 // back/forward cache, without the browser ever asking the server again —
@@ -19,5 +19,5 @@ export function middleware() {
 }
 
 export const config = {
-  matcher: ["/dashboard", "/dashboard/:path*", "/billing", "/billing/:path*"],
+  matcher: ["/dashboard", "/dashboard/:path*", "/billing", "/billing/:path*", "/admin", "/admin/:path*"],
 };

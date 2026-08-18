@@ -43,3 +43,8 @@ export async function hasValidAdminSession(): Promise<boolean> {
     return false;
   }
 }
+
+export async function clearAdminSession() {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_NAME);
+}

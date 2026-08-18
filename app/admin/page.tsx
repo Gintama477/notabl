@@ -1,6 +1,7 @@
 import { getAdminOverview, getProspects } from "@/lib/db/queries";
 import { formatPrice } from "@/config/pricing";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
+import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { PilotInviteForm, PilotToggleTable, PilotRow, ConnectGoogleReviewsForm } from "@/components/admin/PilotManagement";
 import { FindProspectsForm, OutreachQueueTable, ProspectRow } from "@/components/admin/OutreachQueue";
 
@@ -85,8 +86,16 @@ export default async function AdminPage({
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10">
+      <BfcacheGuard />
       <div className="mx-auto max-w-5xl">
-        <h1 className="font-serif text-2xl font-semibold text-slate-900">Notabl Admin</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="font-serif text-2xl font-semibold text-slate-900">Notabl Admin</h1>
+          <form action="/api/admin/logout" method="post">
+            <button className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+              Log Out
+            </button>
+          </form>
+        </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Accounts" value={String(data.accountCount)} />
