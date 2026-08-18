@@ -4,6 +4,7 @@ import { getSessionAccountId } from "@/lib/auth/session";
 import { getBusinessForAccount, getDashboardData, getSubscriptionForAccount, findDuplicateBusiness } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
+import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { DemoDataBanner } from "@/components/dashboard/DemoDataBanner";
 import { ConnectReviewsCard } from "@/components/dashboard/ConnectReviewsCard";
 import { DuplicateBusinessNotice } from "@/components/dashboard/DuplicateBusinessNotice";
@@ -67,6 +68,7 @@ export default async function DashboardPage() {
 
   return (
     <>
+      <BfcacheGuard />
       <Header />
       {data.hasDemoData && <DemoDataBanner showSubscriptionCta={!hasStartedSubscription} />}
       <main className="flex-1 bg-slate-50 py-10">

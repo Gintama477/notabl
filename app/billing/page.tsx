@@ -4,6 +4,7 @@ import { getSessionAccountId } from "@/lib/auth/session";
 import { getSubscriptionForAccount } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
+import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { PLANS, DEFAULT_PLAN, formatPrice } from "@/config/pricing";
 import { isLiveBillingEnabled } from "@/lib/billing/provider";
 
@@ -30,6 +31,7 @@ export default async function BillingPage({
 
   return (
     <>
+      <BfcacheGuard />
       <Header />
       <main className="flex-1 bg-slate-50 py-16">
         <div className="mx-auto max-w-lg px-6">

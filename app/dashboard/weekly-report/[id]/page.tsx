@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
+import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { DemoDataBanner } from "@/components/dashboard/DemoDataBanner";
 import { ReportBody } from "@/components/report/ReportBody";
 import { WeeklyReportView } from "@/components/dashboard/WeeklyReportView";
@@ -40,6 +41,7 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
 
   return (
     <>
+      <BfcacheGuard />
       <Header />
       {hasDemoData && <DemoDataBanner showSubscriptionCta={!hasStartedSubscription} />}
       <WeeklyReportView businessId={business.id} />
