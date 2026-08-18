@@ -124,28 +124,43 @@ export default async function BillingPage({
               </p>
             )}
 
-            {!subscription?.isPilot && (
-              <div className="mt-6 flex flex-col gap-2">
-                {(!subscription ||
-                  subscription.status === "none" ||
-                  subscription.status === "trialing" ||
-                  subscription.status === "past_due" ||
-                  subscription.status === "canceled") && (
-                  <form action="/api/billing/checkout" method="post">
-                    <button className="w-full rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800">
-                      {subscription?.status === "past_due" ? "Retry Payment" : "Add Payment Method"}
-                    </button>
-                  </form>
-                )}
-                {(subscription?.status === "active" || subscription?.status === "trialing") && (
-                  <form action="/api/billing/portal" method="post">
-                    <button className="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                      Manage Billing
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
+            {!subscription?.isPilot &&
+              (() => {
+                const status = subscription?.status;
+                const hasStripeCustomer = Boolean(subscription?.stripeCustomerId);
+                // First-time or fully-over: no Stripe history at all, or
+                // had one but it's fully canceled — both are safe to send
+                // through a fresh Checkout (item 7's route-level guard is
+                // the real backstop against ever creating a second live
+                // subscription, not this button logic).
+                const showCheckoutButton = !hasStripeCustomer || status === "canceled" || status === "trialing";
+                // Any existing Stripe customer whose subscription isn't
+                // fully canceled goes to the portal — covers active,
+                // trialing, past_due, and any other real Stripe status not
+                // specifically mapped (incomplete, incomplete_expired,
+                // unpaid, paused, ...), so nobody hits a dead end with a
+                // status label and no actionable button at all.
+                const showPortalButton = hasStripeCustomer && status !== "canceled";
+
+                return (
+                  <div className="mt-6 flex flex-col gap-2">
+                    {showCheckoutButton && (
+                      <form action="/api/billing/checkout" method="post">
+                        <button className="w-full rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800">
+                          {status === "canceled" ? "Resubscribe" : "Add Payment Method"}
+                        </button>
+                      </form>
+                    )}
+                    {showPortalButton && (
+                      <form action="/api/billing/portal" method="post">
+                        <button className="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                          {status === "past_due" ? "Update Payment Method" : "Manage Billing"}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                );
+              })()}
           </div>
         </div>
       </main>
