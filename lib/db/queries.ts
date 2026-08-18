@@ -588,12 +588,24 @@ export async function getDashboardData(businessId: string) {
   const emergingIssuesCount = rollups.filter((r) => r.trendDirection === "new").length;
   const importantThemesCount = rollups.length;
 
-  // Drives whether <DemoDataBanner /> shows (see app/dashboard/page.tsx) —
-  // true only until a business's first real review source connects and its
-  // demo reviews are removed (see connectGoogleReviewSource above). A
-  // business with zero reviews at all (shouldn't normally happen — every
-  // signup gets the demo dataset) is treated as demo too, the safer default.
-  const hasDemoData = totalReviews === 0 || allReviews.some((r) => r.isDemoData);
+  // Drives whether <DemoDataBanner /> shows and whether the dashboard
+  // treats this as "real report" territory (see app/dashboard/page.tsx).
+  // Deliberately based on whether a real "google" source has been
+  // connected (connectGoogleReviewSource creates this row), NOT on review
+  // count — a real, valid, newly-connected business can genuinely have
+  // zero reviews so far (a new listing, or one that just hasn't been
+  // reviewed yet), and totalReviews === 0 used to treat that identically
+  // to "still on demo data," showing the sample-data banner and reopening
+  // the connect-reviews card right after a paying customer did exactly
+  // what was asked. A business with no google source at all (the normal
+  // pre-connect state, or the edge case of literally zero reviews of any
+  // kind) is still correctly treated as demo.
+  const [googleSource] = await db
+    .select({ id: reviewSources.id })
+    .from(reviewSources)
+    .where(and(eq(reviewSources.businessId, businessId), eq(reviewSources.sourceType, "google")))
+    .limit(1);
+  const hasDemoData = !googleSource;
 
   return {
     business,
