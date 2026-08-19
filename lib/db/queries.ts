@@ -11,6 +11,7 @@ import {
   weeklyReports,
   themeRollups,
   analysisRuns,
+  reviewThemeMentions,
   subscriptions,
   automationLogs,
   events,
@@ -19,7 +20,7 @@ import {
   prospects,
   supportAppeals,
 } from "@/lib/db/schema.pg";
-import { eq, desc, and, gte, ne, ilike } from "drizzle-orm";
+import { eq, desc, and, gte, lte, ne, ilike, isNotNull } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
 import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
@@ -405,6 +406,78 @@ export async function getLatestAnalysisRun(businessId: string) {
 
 export async function getThemeRollupsForRun(analysisRunId: string) {
   return db.select().from(themeRollups).where(eq(themeRollups.analysisRunId, analysisRunId));
+}
+
+export type ThemeExcerpt = {
+  text: string;
+  rating: number;
+  authorName: string | null;
+  sentiment: string;
+};
+
+// The one new query the "real patient quotes" feature reuses everywhere
+// (main dashboard theme cards, Full Report theme sections, and the public
+// sample-report page). Every excerpt here has already passed
+// lib/ai/validate.ts's sanitizeExtraction() at analysis time, which drops
+// any excerpt that isn't a verbatim substring of the source review — so
+// nothing here needs re-verifying against review text, it's guaranteed
+// exact by the time it lands in reviewThemeMentions.
+export async function getThemeExcerptsForRun(
+  analysisRunId: string,
+  limitPerTheme = 2
+): Promise<Record<string, ThemeExcerpt[]>> {
+  const rows = await db
+    .select({
+      themeCategory: reviewThemeMentions.themeCategory,
+      excerpt: reviewThemeMentions.excerpt,
+      sentiment: reviewThemeMentions.sentiment,
+      confidence: reviewThemeMentions.confidence,
+      rating: reviews.rating,
+      authorName: reviews.authorName,
+    })
+    .from(reviewThemeMentions)
+    .innerJoin(reviews, eq(reviewThemeMentions.reviewId, reviews.id))
+    .where(and(eq(reviewThemeMentions.analysisRunId, analysisRunId), isNotNull(reviewThemeMentions.excerpt)))
+    .orderBy(desc(reviewThemeMentions.confidence));
+
+  const byTheme: Record<string, ThemeExcerpt[]> = {};
+  for (const row of rows) {
+    if (!row.excerpt) continue;
+    const list = byTheme[row.themeCategory] ?? (byTheme[row.themeCategory] = []);
+    if (list.length >= limitPerTheme) continue;
+    list.push({ text: row.excerpt, rating: row.rating, authorName: row.authorName, sentiment: row.sentiment });
+  }
+  return byTheme;
+}
+
+export type ReviewRatingFilter = "all" | "low" | "mid" | "high"; // 1-2, 3, 4-5
+
+// Real (non-demo) reviews only, newest first, paginated — backs the new
+// "All Reviews" browsable list at app/dashboard/reviews/page.tsx.
+export async function getPaginatedReviewsForBusiness(
+  businessId: string,
+  opts: { page?: number; pageSize?: number; ratingFilter?: ReviewRatingFilter } = {}
+) {
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = opts.pageSize ?? 25;
+  const conditions = [eq(reviews.businessId, businessId), eq(reviews.isDemoData, false)];
+  if (opts.ratingFilter === "low") conditions.push(lte(reviews.rating, 2));
+  else if (opts.ratingFilter === "mid") conditions.push(eq(reviews.rating, 3));
+  else if (opts.ratingFilter === "high") conditions.push(gte(reviews.rating, 4));
+  const whereClause = and(...conditions);
+
+  const allMatching = await db.select({ id: reviews.id }).from(reviews).where(whereClause);
+  const totalCount = allMatching.length;
+
+  const rows = await db
+    .select()
+    .from(reviews)
+    .where(whereClause)
+    .orderBy(desc(reviews.reviewDate))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  return { reviews: rows, totalCount, page, pageSize, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) };
 }
 
 export async function getReviewCountForBusiness(businessId: string) {
