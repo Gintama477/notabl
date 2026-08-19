@@ -42,17 +42,19 @@ function SectionCard({
   accent,
   children,
   empty,
+  emptyMessage = "Nothing notable this period.",
 }: {
   title: string;
   accent: string;
   children: React.ReactNode;
   empty?: boolean;
+  emptyMessage?: string;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-6">
       <h3 className={`font-serif text-lg font-semibold ${accent}`}>{title}</h3>
       {empty ? (
-        <p className="mt-3 text-sm text-slate-400">Nothing notable this period.</p>
+        <p className="mt-3 text-sm text-slate-400">{emptyMessage}</p>
       ) : (
         <div className="mt-4 space-y-3">{children}</div>
       )}
@@ -88,14 +90,38 @@ export function WhatPatientsDislike({ items, excerptsByTheme }: { items: ThemeRe
   );
 }
 
-export function NewThisWeek({ items, excerptsByTheme }: { items: ThemeRef[]; excerptsByTheme?: ExcerptsByTheme }) {
+export type NewReview = {
+  id: string;
+  authorName: string | null;
+  rating: number;
+  reviewText: string;
+  reviewDate: string;
+};
+
+// Under the cumulative report model (see lib/analysis/runAnalysis.ts), the
+// theme sections above and below this one are built from the business's
+// full review history and are never empty — so this section is deliberately
+// the ONE honest, literal "what came in since last time" list. A quiet week
+// with zero new reviews is a completely normal, expected state here, not a
+// sign anything's broken.
+export function NewThisWeek({ reviews }: { reviews: NewReview[] }) {
   return (
-    <SectionCard title="New This Week" accent="text-amber-800" empty={items.length === 0}>
-      {items.map((t) => (
-        <div key={t.category} className="border-l-2 border-amber-500 pl-3">
-          <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
-          <p className="text-sm text-slate-600">{t.summary}</p>
-          <QuoteList quotes={excerptsByTheme?.[t.category]} />
+    <SectionCard
+      title="New Reviews This Week"
+      accent="text-amber-800"
+      empty={reviews.length === 0}
+      emptyMessage="No new reviews since your last report."
+    >
+      {reviews.map((r) => (
+        <div key={r.id} className="border-l-2 border-amber-500 pl-3">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>{r.authorName?.trim() || "Anonymous"}</span>
+            <span aria-hidden className="text-amber-500">
+              {"★".repeat(r.rating)}
+              {"☆".repeat(Math.max(0, 5 - r.rating))}
+            </span>
+          </div>
+          <p className="mt-1 text-sm italic text-slate-600">&ldquo;{r.reviewText}&rdquo;</p>
         </div>
       ))}
     </SectionCard>

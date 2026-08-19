@@ -7,6 +7,7 @@ import {
   getSubscriptionForAccount,
   findDuplicateBusiness,
   getThemeExcerptsForRun,
+  getNewReviewsForRun,
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
@@ -69,13 +70,21 @@ export default async function DashboardPage() {
 
   const topPositiveThemes = data.latestReport ? JSON.parse(data.latestReport.topPositiveThemesJson) : [];
   const topNegativeThemes = data.latestReport ? JSON.parse(data.latestReport.topNegativeThemesJson) : [];
-  const emergingIssues = data.latestReport ? JSON.parse(data.latestReport.emergingIssuesJson) : [];
   const recommendedActions = data.latestReport ? JSON.parse(data.latestReport.recommendedActionsJson) : [];
 
   // A couple of real, verbatim quotes per theme — same run the theme cards
   // above already summarize, just surfaced at the individual-review level.
   // Not fetched (and not shown) for demo data or when there's no run yet.
   const excerptsByTheme = data.latestRun ? await getThemeExcerptsForRun(data.latestRun.id, 2) : {};
+
+  // The literal "what came in since last time" list — deliberately not the
+  // AI-summarized emergingIssues theme list (that's a cumulative theme
+  // rollup, kept on the Full Report page instead, since the theme cards
+  // above are never empty under the cumulative model and this is meant to
+  // be the one honest, possibly-empty-on-a-quiet-week section).
+  const newReviews = data.latestReport
+    ? await getNewReviewsForRun(business.id, data.latestReport.periodStart, data.latestReport.periodEnd)
+    : [];
 
   return (
     <>
@@ -166,7 +175,7 @@ export default async function DashboardPage() {
                 <div className="mt-8 grid gap-6 lg:grid-cols-2">
                   <WhatPatientsLove items={topPositiveThemes} excerptsByTheme={excerptsByTheme} />
                   <WhatPatientsDislike items={topNegativeThemes} excerptsByTheme={excerptsByTheme} />
-                  <NewThisWeek items={emergingIssues} excerptsByTheme={excerptsByTheme} />
+                  <NewThisWeek reviews={newReviews} />
                   <IssuesGettingWorse rollups={data.rollups} excerptsByTheme={excerptsByTheme} />
                   <Opportunities rollups={data.rollups} excerptsByTheme={excerptsByTheme} />
                   <RecommendedActions items={recommendedActions} />
