@@ -12,6 +12,7 @@ import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
+import { formatReviewText } from "@/lib/reviews/formatReviewText";
 
 const RATING_FILTERS: { value: ReviewRatingFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -137,7 +138,7 @@ export default async function ReviewsPage({
                           {"☆".repeat(5 - r.rating)} · {fmtDate(r.reviewDate)}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm text-slate-700">{r.reviewText}</p>
+                      <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{formatReviewText(r.reviewText)}</p>
                     </div>
                   ))}
                 </div>

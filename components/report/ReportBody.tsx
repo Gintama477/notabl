@@ -2,6 +2,7 @@ import Link from "next/link";
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
 import type { ThemeExcerpt } from "@/lib/db/queries";
 import { formatReportPeriod } from "@/lib/reports/formatPeriodLabel";
+import { formatReviewText } from "@/lib/reviews/formatReviewText";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
 type Action = { title: string; detail: string };
@@ -149,7 +150,7 @@ export function ReportBody({
                     {"☆".repeat(5 - r.rating)} · {fmtDate(r.reviewDate)}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-slate-700">{r.reviewText}</p>
+                <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{formatReviewText(r.reviewText)}</p>
               </div>
             ))}
           </div>
@@ -200,8 +201,8 @@ function QuoteList({ quotes }: { quotes: ThemeExcerpt[] | undefined }) {
   return (
     <div className="mt-2 space-y-2">
       {quotes.map((q, i) => (
-        <blockquote key={i} className="border-l-2 border-slate-200 pl-3 text-sm italic text-slate-500">
-          &ldquo;{q.text}&rdquo;
+        <blockquote key={i} className="whitespace-pre-line border-l-2 border-slate-200 pl-3 text-sm italic text-slate-500">
+          &ldquo;{formatReviewText(q.text)}&rdquo;
           <footer className="mt-1 not-italic text-xs text-slate-400">
             <span aria-hidden className="text-amber-500">
               {"★".repeat(q.rating)}
