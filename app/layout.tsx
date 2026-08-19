@@ -11,9 +11,9 @@ import "./globals.css";
 // unrestricted network access, if desired.
 
 export const metadata: Metadata = {
-  title: "Notabl — Know what your patients are really saying",
+  title: "Notabl — Get more patient reviews, and know what they say",
   description:
-    "Notabl analyzes your dental practice's patient reviews and sends a clear weekly report showing praise, complaints, emerging issues, and what deserves your attention.",
+    "Notabl gives your dental practice a QR code that makes it easy for patients to leave a review, then reads every review that comes in and sends a plain-language weekly report on what they add up to.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

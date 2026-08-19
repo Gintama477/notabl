@@ -17,14 +17,26 @@ export function Hero() {
             <p className="mb-5 inline-block rounded-full bg-teal-50 px-3 py-1 text-xs font-medium tracking-wide text-teal-800 uppercase ring-1 ring-inset ring-teal-100">
               Built for dental practices
             </p>
+            {/*
+              Both halves of the product, in order: getting reviews in, and
+              understanding them. Leading with either one alone is the
+              failure mode — "get more reviews" on its own makes Notabl sound
+              like the fifth review-generation vendor to cold-pitch this
+              practice that month (Podium, Birdeye, NiceJob, Weave all sell
+              into this exact market at $75-$500/month), and "we read your
+              reviews" on its own is the analysis-only positioning this copy
+              replaced. The pairing at $49/month is what's actually
+              differentiated. See marketing/core-sales-message.md.
+            */}
             <h1 className="font-serif text-4xl font-semibold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl">
-              Know what your patients are saying before small problems
-              become big ones.
+              Get more patient reviews — and know what they&apos;re
+              actually telling you.
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-600">
-              Notabl analyzes your patient reviews and sends you a
-              clear weekly report showing praise, complaints, emerging
-              issues, and what deserves your attention.
+              Share a QR code at the front desk, and patients can leave a
+              Google review in a couple of taps. Notabl reads every review
+              that comes in and sends you a plain-language weekly report on
+              what they add up to.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <TrackedCtaLink

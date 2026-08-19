@@ -31,10 +31,22 @@ export function ReviewRequestsSection() {
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-teal-50 text-teal-700">
               <MessageSquareText className="h-5 w-5" strokeWidth={2} />
             </div>
-            <h3 className="mt-4 font-medium text-slate-900">Private feedback, when it&apos;s not public</h3>
+            <h3 className="mt-4 font-medium text-slate-900">Patients choose where it goes</h3>
+            {/*
+              Deliberately NOT framed as a way to head off or intercept bad
+              reviews, even though that's the tempting sales angle. That
+              framing describes review gating, which Google prohibits and the
+              FTC's Consumer Review Rule creates separate exposure for — and
+              stating it in writing on a public marketing page is exactly the
+              thing a competitor or a journalist screenshots. The accurate,
+              safe description is the neutral one: both options, equal
+              weight, patient's call. See the no-gating comment in
+              app/r/[slug]/ReviewChoiceSection.tsx, which enforces the same
+              constraint in the UI itself.
+            */}
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Every patient sees the same two choices, at equal weight. Private feedback goes straight to you — the
-              complaint that never became a public 1-star review.
+              Every patient sees the same two choices side by side, at equal weight, and decides for themselves.
+              Anything sent privately comes straight to you instead of being posted.
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-5">

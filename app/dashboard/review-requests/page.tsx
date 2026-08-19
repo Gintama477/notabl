@@ -166,9 +166,15 @@ export default async function ReviewRequestsPage({
 
         <div className="mt-10">
           <h2 className="font-serif text-lg font-semibold text-slate-900">Private Feedback</h2>
+          {/* Neutralized to match the no-gating rule the public marketing
+              copy now follows (see components/marketing/ReviewRequestsSection.tsx).
+              This page is authenticated rather than public, so the framing is
+              lower-risk here, but "the complaint that didn't become a 1-star
+              review" describes the gating value prop and there's no cost to
+              stating it descriptively instead. */}
           <p className="mt-1 text-xs text-slate-400">
-            Sent anonymously through your review-request page instead of posted publicly — this is the complaint that
-            didn&apos;t become a public 1-star review.
+            Sent by patients who chose to send it straight to you rather than post publicly. Not shown on Google, and
+            not counted in your rating.
           </p>
           {feedback.length === 0 ? (
             <div className="mt-4 rounded-lg border border-slate-200 bg-white p-8 text-center">

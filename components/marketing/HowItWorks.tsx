@@ -1,18 +1,24 @@
+// Three steps that describe the whole loop, not just the analysis half —
+// step 2 is the review-request side, which this list omitted entirely before
+// the Review Requests build. Step 2 says "you share it" on purpose: Notabl
+// never contacts patients, and the copy shouldn't leave room to assume
+// otherwise (see the constraint comments in lib/db/schema.pg.ts's
+// patient_feedback table and app/r/[slug]/ReviewChoiceSection.tsx).
 const STEPS = [
   {
     step: "1",
     title: "Connect your practice",
-    desc: "Enter your practice name, website, and public review profile links.",
+    desc: "Enter your practice name and link your Google reviews. Takes a couple of minutes.",
   },
   {
     step: "2",
-    title: "We analyze your reviews",
-    desc: "Themes, sentiment, and trends are extracted automatically — no manual reading required.",
+    title: "Share your QR code",
+    desc: "Print it for the front desk, or drop your link into the appointment reminders you already send. Patients scan it and choose where their feedback goes.",
   },
   {
     step: "3",
     title: "Get your weekly report",
-    desc: "A clear summary lands in your inbox every week, plus a live dashboard.",
+    desc: "Notabl reads every review that comes in and sends a clear summary each week — plus a live dashboard, and a count of what your requests brought in.",
   },
 ];
 

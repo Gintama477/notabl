@@ -30,17 +30,20 @@ review content:
 What NOT to do at this tier: never write "I noticed reviews mentioning X"
 unless X came from an actual Notabl analysis run. If no analysis has
 been run, the outreach email should not reference specific complaint
-themes at all — see Email 1 in `outreach-emails.md`, which references the
+themes at all — see Email 1 in `outreach-materials.md`, which references the
 *concept* (owners can't see patterns from individual reviews) rather than
 claiming a specific finding about that specific practice.
 
 ### Tier 2 — Warm personalization (after a free sample analysis has run)
 
 Once a prospect has entered their public review profile link and
-Notabl has run a real analysis on their actual reviews (via the
-signup flow's demo-data substitute today, or a real authorized data source
-once Phase 4 connects one), the system has genuine, sourced findings it can
-reference. At that point a follow-up can honestly say something like:
+Notabl has run a real analysis on their actual reviews (either the demo
+dataset a new signup starts on, or — now that self-serve Google connection
+has shipped — their real Google reviews), the system has genuine, sourced
+findings it can reference. Note the demo dataset is NOT a valid source for a
+personalized claim: it's synthetic data about a fictional practice, so a
+"finding" from it says nothing about the prospect. With a real connected
+source, a follow-up can honestly say something like:
 
 > "Your Notabl sample showed 4 recent mentions of appointment wait
 > times — here's the full report: {{link}}"

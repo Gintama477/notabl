@@ -97,8 +97,9 @@ export function SignupForm() {
         <h1 className="font-serif text-3xl font-semibold text-slate-900">Analyze your reviews</h1>
         <p className="mt-2 text-slate-600">
           Tell us about your practice. We&apos;ll set up your dashboard right away using{" "}
-          <strong>demo review data</strong> for this prototype — live review data
-          requires connecting an authorized data source, coming in a later phase.
+          <strong>demo review data</strong> so you can see how it works, and you can connect your
+          real Google reviews — and get your review-request QR code — from the dashboard once
+          you&apos;re in.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5 rounded-lg border border-slate-200 bg-white p-6">
