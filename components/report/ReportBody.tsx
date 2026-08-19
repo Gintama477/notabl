@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
 import type { ThemeExcerpt } from "@/lib/db/queries";
+import { formatReportPeriod } from "@/lib/reports/formatPeriodLabel";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
 type Action = { title: string; detail: string };
@@ -60,9 +61,7 @@ export function ReportBody({
       <header className="border-b border-slate-200 px-8 py-8">
         <p className="text-xs font-medium uppercase tracking-wide text-teal-700">Notabl Weekly Report</p>
         <h1 className="mt-1 font-serif text-3xl font-semibold text-slate-900">{businessName}</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {fmtDate(report.periodStart)} – {fmtDate(report.periodEnd)}
-        </p>
+        <p className="mt-1 text-sm text-slate-500">{formatReportPeriod(report.periodStart, report.periodEnd, fmtDate)}</p>
       </header>
 
       <div className="space-y-10 px-8 py-8">

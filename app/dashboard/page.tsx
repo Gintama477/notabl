@@ -26,6 +26,7 @@ import {
 import { RunAnalysisButton } from "@/components/dashboard/RunAnalysisButton";
 import { track } from "@/lib/analytics/track";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
+import { formatReportPeriod } from "@/lib/reports/formatPeriodLabel";
 
 export default async function DashboardPage() {
   const accountId = await getSessionAccountId();
@@ -99,8 +100,7 @@ export default async function DashboardPage() {
               <h1 className="font-serif text-2xl font-semibold text-slate-900">{business.name}</h1>
               {data.latestReport && (
                 <p className="mt-1 text-sm text-slate-500">
-                  Latest analysis period: {new Date(data.latestReport.periodStart).toLocaleDateString()} –{" "}
-                  {new Date(data.latestReport.periodEnd).toLocaleDateString()}
+                  Latest analysis period: {formatReportPeriod(data.latestReport.periodStart, data.latestReport.periodEnd)}
                 </p>
               )}
             </div>
