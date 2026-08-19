@@ -49,11 +49,7 @@ export async function POST(req: NextRequest) {
     const result = await connectGoogleReviewSource(business.id, business.name, parsed.data.placeId);
 
     try {
-      // fullBackfill: this is the moment this business's real review
-      // history first becomes available — without it, the first report
-      // would only cover the last 7 days of what's often years of reviews
-      // and look empty. See lib/analysis/runAnalysis.ts.
-      await runAnalysisForBusiness(business.id, business.name, new Date().toISOString(), 7, { fullBackfill: true });
+      await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
     } catch (analysisErr) {
       console.error("Post-connect analysis failed:", analysisErr);
       // Connection itself still succeeded — surface that, don't fail the whole request.

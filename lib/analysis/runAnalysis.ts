@@ -9,17 +9,19 @@
 
 import { db } from "@/lib/db/client";
 import { reviews, reviewThemeMentions, analysisRuns, themeRollups, weeklyReports, automationLogs } from "@/lib/db/schema.pg";
-import { and, eq, gte, lt, asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { extractReviewThemes } from "@/lib/ai/extractReview";
 import { computeThemeRollups, ThemeMentionRecord } from "@/lib/ai/computeTrends";
 import { generateWeeklyNarrative } from "@/lib/ai/generateReportNarrative";
 import { getAIProvider } from "@/lib/ai/provider";
-import { getLatestWeeklyReport, getThemeRollupsForRun } from "@/lib/db/queries";
+import { getLatestWeeklyReport, getThemeRollupsForRun, getNewReviewsForRun } from "@/lib/db/queries";
 
 export type RunAnalysisResult = {
   analysisRunId: string;
   weeklyReportId: string;
   reviewsNewlyAnalyzed: number;
+  // Genuinely new reviews since the last report (periodStart-periodEnd) —
+  // NOT the cumulative total the report's theme rollup is built from.
   reviewsInPeriod: number;
 };
 
@@ -27,44 +29,11 @@ export async function runAnalysisForBusiness(
   businessId: string,
   businessName: string,
   periodEndISO: string,
-  periodLengthDays = 7,
-  options?: { fullBackfill?: boolean }
+  periodLengthDays = 7
 ): Promise<RunAnalysisResult> {
   const periodEnd = new Date(periodEndISO);
-  let periodStart: Date;
-  let priorPeriodStart: Date;
-
-  if (options?.fullBackfill) {
-    // A business's very first real report should summarize everything
-    // imported so far, not just the last periodLengthDays — an established
-    // practice's Google reviews are almost always spread across years, so a
-    // plain 7-day window looks empty right after connecting even though
-    // every review was genuinely read by the AI extraction loop below.
-    // periodStart is the actual earliest review on file, queried, not
-    // guessed/hardcoded.
-    const [earliest] = await db
-      .select({ reviewDate: reviews.reviewDate })
-      .from(reviews)
-      .where(eq(reviews.businessId, businessId))
-      .orderBy(asc(reviews.reviewDate))
-      .limit(1);
-    periodStart = earliest ? new Date(earliest.reviewDate) : new Date(periodEnd);
-    if (!earliest) periodStart.setUTCDate(periodStart.getUTCDate() - periodLengthDays);
-
-    // There's no meaningful "prior period" to compare against on a first
-    // report. Setting priorPeriodStart equal to periodStart makes the
-    // prior-period window below zero-width, so priorPeriodReviews (and in
-    // turn priorMentions passed into computeThemeRollups) comes back empty
-    // on its own — every theme correctly shows as newly appearing rather
-    // than being compared against a window that doesn't represent anything
-    // real, without needing a separate code path for the rollup call.
-    priorPeriodStart = new Date(periodStart);
-  } else {
-    periodStart = new Date(periodEnd);
-    periodStart.setUTCDate(periodStart.getUTCDate() - periodLengthDays);
-    priorPeriodStart = new Date(periodStart);
-    priorPeriodStart.setUTCDate(priorPeriodStart.getUTCDate() - periodLengthDays);
-  }
+  const periodStart = new Date(periodEnd);
+  periodStart.setUTCDate(periodStart.getUTCDate() - periodLengthDays);
 
   const startedAt = new Date().toISOString();
   const provider = getAIProvider();
@@ -91,23 +60,11 @@ export async function runAnalysisForBusiness(
   });
 
   try {
-    // Reviews touching either period (needed for the trend comparison).
-    const allReviewsInRange = await db
-      .select()
-      .from(reviews)
-      .where(
-        and(
-          eq(reviews.businessId, businessId),
-          gte(reviews.reviewDate, priorPeriodStart.toISOString()),
-          lt(reviews.reviewDate, periodEnd.toISOString())
-        )
-      );
-
-    // Every review for the business that has never been analyzed, regardless
-    // of period — this is what makes the *first* run a full backfill (so a
-    // brand-new signup's dashboard reflects all of their imported reviews,
-    // not just the last 14 days) while later runs only pay to analyze
-    // whatever is genuinely new (cost control, see docs/ARCHITECTURE.md §18).
+    // Every review for the business, regardless of date — needed both for
+    // the extraction loop below (any never-analyzed review, whatever its
+    // date, so a brand-new signup's dashboard reflects everything imported,
+    // not just the last 7 days — cost control, see docs/ARCHITECTURE.md
+    // §18) and to build this run's cumulative mention windows further down.
     const allBusinessReviews = await db.select().from(reviews).where(eq(reviews.businessId, businessId));
 
     let newlyAnalyzed = 0;
@@ -138,19 +95,31 @@ export async function runAnalysisForBusiness(
       await db.update(reviews).set({ analyzedAt: new Date().toISOString() }).where(eq(reviews.id, review.id));
     }
 
-    // Re-fetch every mention for reviews in range (covers ones analyzed by
-    // this run AND ones analyzed previously) to build the rollup.
-    const currentPeriodReviews = allReviewsInRange.filter(
-      (r) => new Date(r.reviewDate) >= periodStart && new Date(r.reviewDate) < periodEnd
-    );
-    const priorPeriodReviews = allReviewsInRange.filter(
-      (r) => new Date(r.reviewDate) >= priorPeriodStart && new Date(r.reviewDate) < periodStart
-    );
+    // Cumulative model: every report's theme rollup reflects the business's
+    // FULL review history to date, not a narrow weekly slice — a normal
+    // practice getting only a handful of new reviews a week would otherwise
+    // produce a near-empty report every single time. currentMentions is
+    // every theme mention for reviews up to periodEnd (no lower bound);
+    // priorMentions is the cumulative snapshot as it stood one period ago
+    // (up to periodStart) — the trend comparison is "running total now" vs.
+    // "running total then," which stays meaningful even on a quiet week. A
+    // theme with mentions now and none in that prior snapshot naturally
+    // shows as "new" (see computeThemeRollups's trendDirection logic) —
+    // including, correctly, every theme on a business's very first-ever
+    // report, when priorMentions is empty because nothing existed yet one
+    // period ago. No special-casing needed for that case.
+    const currentReviewIds = allBusinessReviews.filter((r) => new Date(r.reviewDate) < periodEnd).map((r) => r.id);
+    const priorReviewIds = allBusinessReviews.filter((r) => new Date(r.reviewDate) < periodStart).map((r) => r.id);
 
-    const currentMentions = await mentionsForReviews(currentPeriodReviews.map((r) => r.id));
-    const priorMentions = await mentionsForReviews(priorPeriodReviews.map((r) => r.id));
+    const currentMentions = await mentionsForReviews(currentReviewIds);
+    const priorMentions = await mentionsForReviews(priorReviewIds);
 
     const rollups = computeThemeRollups(currentMentions, priorMentions);
+
+    // The literal "what came in since last time" list — deliberately
+    // separate from the cumulative rollup above, and allowed to be
+    // genuinely, honestly empty on a quiet week (see getNewReviewsForRun).
+    const newReviewsThisPeriod = await getNewReviewsForRun(businessId, periodStart.toISOString(), periodEnd.toISOString());
 
     if (rollups.length > 0) {
       await db.insert(themeRollups).values(
@@ -202,14 +171,18 @@ export async function runAnalysisForBusiness(
             analysisRunId: run.id,
             weeklyReportId: previousReport.id,
             reviewsNewlyAnalyzed: 0,
-            reviewsInPeriod: currentPeriodReviews.length,
+            reviewsInPeriod: newReviewsThisPeriod.length,
           };
         }
       }
     }
 
-    const periodLabel = `${periodStart.toISOString().slice(0, 10)} to ${periodEnd.toISOString().slice(0, 10)}`;
-    const narrative = await generateWeeklyNarrative(rollups, currentPeriodReviews.length, periodLabel, businessName);
+    // Cumulative framing, matching what the narrative is actually being
+    // asked to describe: the business's full history to date, not a narrow
+    // week — totalReviews below is the cumulative count, not just what's
+    // new since last time.
+    const periodLabel = `full history through ${periodEnd.toISOString().slice(0, 10)} (compared with the snapshot as of ${periodStart.toISOString().slice(0, 10)})`;
+    const narrative = await generateWeeklyNarrative(rollups, currentReviewIds.length, periodLabel, businessName);
 
     const [report] = await db
       .insert(weeklyReports)
@@ -241,7 +214,7 @@ export async function runAnalysisForBusiness(
       jobName: "run-analysis",
       businessId,
       status: "success",
-      detail: `Completed run ${run.id}: ${newlyAnalyzed} newly analyzed, ${currentPeriodReviews.length} in current period.`,
+      detail: `Completed run ${run.id}: ${newlyAnalyzed} newly analyzed, ${newReviewsThisPeriod.length} new this period, ${currentReviewIds.length} total reviews reflected in this report.`,
       finishedAt: new Date().toISOString(),
     });
 
@@ -249,7 +222,7 @@ export async function runAnalysisForBusiness(
       analysisRunId: run.id,
       weeklyReportId: report.id,
       reviewsNewlyAnalyzed: newlyAnalyzed,
-      reviewsInPeriod: currentPeriodReviews.length,
+      reviewsInPeriod: newReviewsThisPeriod.length,
     };
   } catch (err) {
     await db

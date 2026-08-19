@@ -20,7 +20,7 @@ import {
   prospects,
   supportAppeals,
 } from "@/lib/db/schema.pg";
-import { eq, desc, and, gte, lte, ne, ilike, isNotNull } from "drizzle-orm";
+import { eq, desc, and, gte, lt, lte, ne, ilike, isNotNull } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
 import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
@@ -589,6 +589,21 @@ export async function getSampleReviewsForRun(businessId: string, periodStart: st
   const combined = [...lowest, ...highest];
   const seen = new Set<string>();
   return combined.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+}
+
+// Literally what came in since last time — no highest/lowest-rated bias,
+// unlike getSampleReviewsForRun above. Backs the dashboard's "new reviews
+// this week" section (see components/dashboard/Sections.tsx's NewThisWeek),
+// which is deliberately separate from the cumulative theme rollups: under
+// the cumulative report model (lib/analysis/runAnalysis.ts), the rollups
+// above it are never empty, so this section can honestly show nothing on a
+// quiet week without the report as a whole looking broken.
+export async function getNewReviewsForRun(businessId: string, periodStart: string, periodEnd: string) {
+  return db
+    .select()
+    .from(reviews)
+    .where(and(eq(reviews.businessId, businessId), gte(reviews.reviewDate, periodStart), lt(reviews.reviewDate, periodEnd)))
+    .orderBy(desc(reviews.reviewDate));
 }
 
 /**
