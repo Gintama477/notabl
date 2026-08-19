@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 export type PilotRow = {
   accountId: string;
@@ -87,7 +88,14 @@ export function PilotInviteForm() {
         disabled={submitting}
         className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60 sm:col-span-1"
       >
-        {submitting ? "Sending…" : "Invite to Pilot"}
+        {submitting ? (
+          <>
+            Sending…
+            <LoadingDots />
+          </>
+        ) : (
+          "Invite to Pilot"
+        )}
       </button>
       {result && (
         <div className={`sm:col-span-4 text-xs ${result.ok ? "text-teal-800" : "text-red-700"}`}>
@@ -174,7 +182,14 @@ export function ConnectGoogleReviewsForm({ businesses }: { businesses: Connectab
         disabled={submitting}
         className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60 sm:col-span-1"
       >
-        {submitting ? "Connecting…" : "Connect Google Reviews"}
+        {submitting ? (
+          <>
+            Connecting…
+            <LoadingDots />
+          </>
+        ) : (
+          "Connect Google Reviews"
+        )}
       </button>
       {result && (
         <div className={`sm:col-span-4 text-xs ${result.ok ? "text-teal-800" : "text-red-700"}`}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FEEDBACK_QUESTIONS } from "@/lib/validation/feedback";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 type FormState = {
   clarityImmediate: string;
@@ -139,7 +140,14 @@ export function FeedbackForm() {
             disabled={submitting}
             className="w-full rounded-md bg-teal-700 px-6 py-3 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
           >
-            {submitting ? "Submitting…" : "Submit Feedback"}
+            {submitting ? (
+              <>
+                Submitting…
+                <LoadingDots />
+              </>
+            ) : (
+              "Submit Feedback"
+            )}
           </button>
         </form>
       </div>

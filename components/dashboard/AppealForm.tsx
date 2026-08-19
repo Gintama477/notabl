@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 /**
  * Shared "Contact Support" flow for the two "someone else may already have
@@ -72,7 +73,14 @@ export function AppealForm({ appealType }: { appealType: "business_already_claim
         disabled={submitting}
         className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
       >
-        {submitting ? "Sending…" : "Submit"}
+        {submitting ? (
+          <>
+            Sending…
+            <LoadingDots />
+          </>
+        ) : (
+          "Submit"
+        )}
       </button>
       {result && !result.ok && <p className="text-sm text-red-700">{result.message}</p>}
     </form>

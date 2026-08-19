@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 export function RunAnalysisButton() {
   const router = useRouter();
@@ -34,7 +35,14 @@ export function RunAnalysisButton() {
         disabled={running}
         className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50 disabled:opacity-60"
       >
-        {running ? "Running analysis…" : "Run Analysis Now"}
+        {running ? (
+          <>
+            Running analysis…
+            <LoadingDots color="slate" />
+          </>
+        ) : (
+          "Run Analysis Now"
+        )}
       </button>
       {message && <span className="text-xs text-slate-500">{message}</span>}
     </div>

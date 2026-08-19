@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppealForm } from "./AppealForm";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 const PLACE_ID_FINDER_URL = "https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder";
 
@@ -130,7 +131,14 @@ export function ConnectReviewsCard() {
                 disabled={submitting}
                 className="shrink-0 rounded-md bg-teal-700 px-5 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
               >
-                {submitting ? "Connecting…" : "Connect"}
+                {submitting ? (
+                  <>
+                    Connecting…
+                    <LoadingDots />
+                  </>
+                ) : (
+                  "Connect"
+                )}
               </button>
             </form>
             {claimedByOther ? (

@@ -18,3 +18,25 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Used by components/ui/LoadingDots.tsx — a small three-dot pulsing
+   indicator applied to every in-flight button sitewide, so waiting reads as
+   "actively working" rather than frozen. Each dot uses the same animation
+   with a staggered animation-delay (set inline by the component) to get the
+   classic in-sequence pulse. */
+@keyframes loading-dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.loading-dot {
+  animation: loading-dot-pulse 1.2s ease-in-out infinite;
+}

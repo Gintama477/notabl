@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 export function SignupForm() {
   const router = useRouter();
@@ -145,7 +146,14 @@ export function SignupForm() {
             disabled={submitting}
             className="w-full rounded-md bg-teal-700 px-6 py-3 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
           >
-            {submitting ? "Setting up your dashboard…" : "Analyze My Reviews"}
+            {submitting ? (
+              <>
+                Setting up your dashboard…
+                <LoadingDots />
+              </>
+            ) : (
+              "Analyze My Reviews"
+            )}
           </button>
           <p className="text-center text-xs text-slate-400">
             No credit card required. By continuing you agree to our{" "}
