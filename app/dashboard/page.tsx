@@ -8,12 +8,14 @@ import {
   findDuplicateBusiness,
   getThemeExcerptsForRun,
   getNewReviewsForRun,
+  hasReviewRequestPageView,
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { DemoDataBanner } from "@/components/dashboard/DemoDataBanner";
 import { ConnectReviewsCard } from "@/components/dashboard/ConnectReviewsCard";
+import { ReviewRequestsPrompt } from "@/components/dashboard/ReviewRequestsPrompt";
 import { DuplicateBusinessNotice } from "@/components/dashboard/DuplicateBusinessNotice";
 import { MetricsRow } from "@/components/dashboard/MetricsRow";
 import {
@@ -97,6 +99,12 @@ export default async function DashboardPage() {
     ? await getNewReviewsForRun(business.id, newReviewsWindowStart.toISOString(), newReviewsWindowEnd.toISOString())
     : [];
 
+  // An unused feature justifies nothing — only nudge a subscribed, real-
+  // data business toward Review Requests before it's ever actually been
+  // shown to a patient.
+  const showReviewRequestsPrompt =
+    !data.hasDemoData && !subscriptionInactive && !(await hasReviewRequestPageView(business.id));
+
   return (
     <>
       <BfcacheGuard />
@@ -114,6 +122,12 @@ export default async function DashboardPage() {
             </div>
           )}
 
+          {showReviewRequestsPrompt && (
+            <div className="mb-8">
+              <ReviewRequestsPrompt />
+            </div>
+          )}
+
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Dashboard</p>
@@ -126,9 +140,17 @@ export default async function DashboardPage() {
             </div>
             <div className="flex items-center gap-3">
               {!data.hasDemoData && (
-                <Link href="/dashboard/reviews" className="text-sm font-medium text-slate-500 hover:text-slate-800">
-                  All Reviews
-                </Link>
+                <>
+                  <Link href="/dashboard/reviews" className="text-sm font-medium text-slate-500 hover:text-slate-800">
+                    All Reviews
+                  </Link>
+                  <Link
+                    href="/dashboard/review-requests"
+                    className="text-sm font-medium text-slate-500 hover:text-slate-800"
+                  >
+                    Review Requests
+                  </Link>
+                </>
               )}
               <Link
                 href="/billing"
