@@ -1,4 +1,5 @@
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
+import type { ThemeExcerpt } from "@/lib/db/queries";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
 type Action = { title: string; detail: string };
@@ -10,6 +11,31 @@ type Rollup = {
   trendDirection: string;
   pctChangeVsPrior: number | null;
 };
+type ExcerptsByTheme = Record<string, ThemeExcerpt[]>;
+
+// Real, verbatim patient quotes shown under a theme's summary. Excerpts have
+// already been validated as exact substrings of their source review at
+// analysis time (lib/ai/validate.ts), so nothing here re-checks that — this
+// only handles display: star rating, italics, and attribution.
+function QuoteList({ quotes }: { quotes: ThemeExcerpt[] | undefined }) {
+  if (!quotes || quotes.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-2">
+      {quotes.map((q, i) => (
+        <blockquote key={i} className="border-l-2 border-slate-200 pl-3 text-sm italic text-slate-500">
+          &ldquo;{q.text}&rdquo;
+          <footer className="mt-1 not-italic text-xs text-slate-400">
+            <span aria-hidden className="text-amber-500">
+              {"★".repeat(q.rating)}
+              {"☆".repeat(Math.max(0, 5 - q.rating))}
+            </span>{" "}
+            — {q.authorName?.trim() || "Anonymous"}
+          </footer>
+        </blockquote>
+      ))}
+    </div>
+  );
+}
 
 function SectionCard({
   title,
@@ -34,46 +60,49 @@ function SectionCard({
   );
 }
 
-export function WhatPatientsLove({ items }: { items: ThemeRef[] }) {
+export function WhatPatientsLove({ items, excerptsByTheme }: { items: ThemeRef[]; excerptsByTheme?: ExcerptsByTheme }) {
   return (
     <SectionCard title="What Patients Love" accent="text-teal-800" empty={items.length === 0}>
       {items.map((t) => (
         <div key={t.category} className="border-l-2 border-teal-600 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
           <p className="text-sm text-slate-600">{t.summary}</p>
+          <QuoteList quotes={excerptsByTheme?.[t.category]} />
         </div>
       ))}
     </SectionCard>
   );
 }
 
-export function WhatPatientsDislike({ items }: { items: ThemeRef[] }) {
+export function WhatPatientsDislike({ items, excerptsByTheme }: { items: ThemeRef[]; excerptsByTheme?: ExcerptsByTheme }) {
   return (
     <SectionCard title="What Patients Dislike" accent="text-red-800" empty={items.length === 0}>
       {items.map((t) => (
         <div key={t.category} className="border-l-2 border-red-600 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
           <p className="text-sm text-slate-600">{t.summary}</p>
+          <QuoteList quotes={excerptsByTheme?.[t.category]} />
         </div>
       ))}
     </SectionCard>
   );
 }
 
-export function NewThisWeek({ items }: { items: ThemeRef[] }) {
+export function NewThisWeek({ items, excerptsByTheme }: { items: ThemeRef[]; excerptsByTheme?: ExcerptsByTheme }) {
   return (
     <SectionCard title="New This Week" accent="text-amber-800" empty={items.length === 0}>
       {items.map((t) => (
         <div key={t.category} className="border-l-2 border-amber-500 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
           <p className="text-sm text-slate-600">{t.summary}</p>
+          <QuoteList quotes={excerptsByTheme?.[t.category]} />
         </div>
       ))}
     </SectionCard>
   );
 }
 
-export function IssuesGettingWorse({ rollups }: { rollups: Rollup[] }) {
+export function IssuesGettingWorse({ rollups, excerptsByTheme }: { rollups: Rollup[]; excerptsByTheme?: ExcerptsByTheme }) {
   const worsening = rollups.filter((r) => r.trendDirection === "increasing" && r.negativeCount > 0);
   return (
     <SectionCard title="Issues Getting Worse" accent="text-red-800" empty={worsening.length === 0}>
@@ -84,13 +113,14 @@ export function IssuesGettingWorse({ rollups }: { rollups: Rollup[] }) {
             Mentions {r.pctChangeVsPrior !== null ? `increased ${Math.round(r.pctChangeVsPrior)}%` : "increased"} compared with the
             previous period ({r.negativeCount} negative mention{r.negativeCount === 1 ? "" : "s"} this period).
           </p>
+          <QuoteList quotes={excerptsByTheme?.[r.themeCategory]} />
         </div>
       ))}
     </SectionCard>
   );
 }
 
-export function Opportunities({ rollups }: { rollups: Rollup[] }) {
+export function Opportunities({ rollups, excerptsByTheme }: { rollups: Rollup[]; excerptsByTheme?: ExcerptsByTheme }) {
   const positiveSorted = rollups
     .filter((r) => r.positiveCount > r.negativeCount && r.positiveCount > 0)
     .sort((a, b) => b.positiveCount - a.positiveCount);
@@ -106,6 +136,7 @@ export function Opportunities({ rollups }: { rollups: Rollup[] }) {
             Praised in {r.positiveCount} review{r.positiveCount === 1 ? "" : "s"} this period — consider
             highlighting this in your marketing or patient communications.
           </p>
+          <QuoteList quotes={excerptsByTheme?.[r.themeCategory]} />
         </div>
       ))}
     </SectionCard>

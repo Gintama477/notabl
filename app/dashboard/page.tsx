@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionAccountId } from "@/lib/auth/session";
-import { getBusinessForAccount, getDashboardData, getSubscriptionForAccount, findDuplicateBusiness } from "@/lib/db/queries";
+import {
+  getBusinessForAccount,
+  getDashboardData,
+  getSubscriptionForAccount,
+  findDuplicateBusiness,
+  getThemeExcerptsForRun,
+} from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
@@ -65,6 +71,11 @@ export default async function DashboardPage() {
   const emergingIssues = data.latestReport ? JSON.parse(data.latestReport.emergingIssuesJson) : [];
   const recommendedActions = data.latestReport ? JSON.parse(data.latestReport.recommendedActionsJson) : [];
 
+  // A couple of real, verbatim quotes per theme — same run the theme cards
+  // above already summarize, just surfaced at the individual-review level.
+  // Not fetched (and not shown) for demo data or when there's no run yet.
+  const excerptsByTheme = data.latestRun ? await getThemeExcerptsForRun(data.latestRun.id, 2) : {};
+
   return (
     <>
       <BfcacheGuard />
@@ -94,9 +105,14 @@ export default async function DashboardPage() {
               )}
             </div>
             <div className="flex items-center gap-3">
+              {!data.hasDemoData && (
+                <Link href="/dashboard/reviews" className="text-sm font-medium text-slate-500 hover:text-slate-800">
+                  All Reviews
+                </Link>
+              )}
               <Link
                 href="/billing"
-                className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
               >
                 Billing
               </Link>
@@ -104,7 +120,7 @@ export default async function DashboardPage() {
               {data.latestReport && (
                 <Link
                   href={`/dashboard/weekly-report/${data.latestReport.id}`}
-                  className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
+                  className="rounded-md bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-teal-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-md hover:shadow-teal-900/20"
                 >
                   View Full Report
                 </Link>
@@ -148,11 +164,11 @@ export default async function DashboardPage() {
                 </div>
               ) : (
                 <div className="mt-8 grid gap-6 lg:grid-cols-2">
-                  <WhatPatientsLove items={topPositiveThemes} />
-                  <WhatPatientsDislike items={topNegativeThemes} />
-                  <NewThisWeek items={emergingIssues} />
-                  <IssuesGettingWorse rollups={data.rollups} />
-                  <Opportunities rollups={data.rollups} />
+                  <WhatPatientsLove items={topPositiveThemes} excerptsByTheme={excerptsByTheme} />
+                  <WhatPatientsDislike items={topNegativeThemes} excerptsByTheme={excerptsByTheme} />
+                  <NewThisWeek items={emergingIssues} excerptsByTheme={excerptsByTheme} />
+                  <IssuesGettingWorse rollups={data.rollups} excerptsByTheme={excerptsByTheme} />
+                  <Opportunities rollups={data.rollups} excerptsByTheme={excerptsByTheme} />
                   <RecommendedActions items={recommendedActions} />
                 </div>
               )}
