@@ -6,18 +6,28 @@ import { PLANS, DEFAULT_PLAN } from "@/config/pricing";
  * disclosure is non-negotiable (shown whenever the parent decides real
  * reviews aren't connected yet — see data.hasDemoData in
  * app/dashboard/page.tsx, unchanged by this component). The second-sentence
- * CTA is conditional: the parent passes showSubscriptionCta={false} once
- * the account has actually completed real Stripe checkout
- * (stripeSubscriptionId set), and only the plain disclosure sentence
- * renders.
+ * CTA is conditional: the parent passes showSubscriptionCta={false} only
+ * while the account is CURRENTLY active/trialing (isActiveOrTrialing) —
+ * NOT merely "has ever subscribed" (that used to hide this CTA forever
+ * once a trial lapsed or a subscription got canceled/went unpaid, even
+ * though that account is back to "not paying, not seeing real data" the
+ * same as day one).
  *
- * "first N days free" is accurate here again as of the subscription-
- * lifecycle fix in lib/db/queries.ts: a new signup now gets status "none"
- * with no trialEndsAt, so the real trial genuinely hasn't started
- * yet — it only begins once this CTA is clicked through and Stripe
- * confirms checkout completed.
+ * hasUsedTrialBefore controls the wording, not just whether it shows: a
+ * returning customer whose trial already ran out once isn't eligible for
+ * a second free trial (checkout skips trial_period_days whenever
+ * stripeCustomerId is already set — see lib/billing/stripeProvider.ts), so
+ * promising "first N days free" to that person would be actively
+ * misleading. Computed by the parent the same way checkout already
+ * decides this: subscription?.stripeCustomerId != null.
  */
-export function DemoDataBanner({ showSubscriptionCta }: { showSubscriptionCta: boolean }) {
+export function DemoDataBanner({
+  showSubscriptionCta,
+  hasUsedTrialBefore,
+}: {
+  showSubscriptionCta: boolean;
+  hasUsedTrialBefore: boolean;
+}) {
   const plan = PLANS[DEFAULT_PLAN];
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-center text-sm font-medium text-amber-800">
@@ -26,9 +36,9 @@ export function DemoDataBanner({ showSubscriptionCta }: { showSubscriptionCta: b
         <>
           {" "}
           <Link href="/billing" className="underline hover:text-amber-900">
-            Click here to start your subscription
+            {hasUsedTrialBefore ? "Click here to subscribe" : "Click here to start your subscription"}
           </Link>{" "}
-          and see your real report — first {plan.trialDays} days free.
+          {hasUsedTrialBefore ? "and see your real report." : `and see your real report — first ${plan.trialDays} days free.`}
         </>
       )}
     </div>

@@ -19,6 +19,7 @@ import {
 } from "@/components/dashboard/Sections";
 import { RunAnalysisButton } from "@/components/dashboard/RunAnalysisButton";
 import { track } from "@/lib/analytics/track";
+import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
 
 export default async function DashboardPage() {
   const accountId = await getSessionAccountId();
@@ -29,17 +30,15 @@ export default async function DashboardPage() {
 
   const data = await getDashboardData(business.id);
   const subscription = await getSubscriptionForAccount(accountId);
-  // Based on subscription.status alone — NOT stripeSubscriptionId. A row
-  // can genuinely have status "trialing"/"active" with stripeCustomerId/
-  // stripeSubscriptionId still null (e.g. a webhook that never landed, or
-  // any other incomplete reconciliation) — requiring that second field on
-  // top of status was pure fragility with no real benefit, and it's
-  // exactly what silently hid this whole flow for a real account before.
-  // A signup starts at status "none" (see createAccountWithDemoBusiness in
-  // lib/db/queries.ts), so "not none" already means a real checkout
-  // happened at some point, whether or not the record is fully populated.
-  const hasStartedSubscription = subscription != null && subscription.status !== "none";
   const isActiveOrTrialing = subscription?.status === "active" || subscription?.status === "trialing";
+  // Whether checkout will actually give this account a free trial — same
+  // signal StripeBillingProvider.createCheckoutSession already uses to
+  // decide whether to skip trial_period_days. A returning customer whose
+  // trial already ran out once (stripeCustomerId set from a prior real
+  // checkout, even if that subscription has since lapsed) isn't eligible
+  // for a second one; the banner's copy has to reflect that instead of
+  // promising "days free" it won't actually deliver.
+  const hasUsedTrialBefore = subscription?.stripeCustomerId != null;
 
   // The one remaining gap between "subscribed" and "seeing your real
   // report" — a paying customer who hasn't connected Google reviews yet.
@@ -70,7 +69,9 @@ export default async function DashboardPage() {
     <>
       <BfcacheGuard />
       <Header />
-      {data.hasDemoData && <DemoDataBanner showSubscriptionCta={!hasStartedSubscription} />}
+      {data.hasDemoData && (
+        <DemoDataBanner showSubscriptionCta={!isActiveOrTrialing} hasUsedTrialBefore={hasUsedTrialBefore} />
+      )}
       <main className="flex-1 bg-slate-50 py-10">
         <div className="mx-auto max-w-6xl px-6">
           {duplicateBusiness && <DuplicateBusinessNotice />}
@@ -118,7 +119,7 @@ export default async function DashboardPage() {
 
           {subscriptionInactive ? (
             <div className="mt-10 rounded-lg border border-amber-200 bg-amber-50 p-8 text-center">
-              <p className="text-slate-700">Your subscription is inactive. Reactivate to see your real report.</p>
+              <p className="text-slate-700">{inactiveSubscriptionMessage(subscription?.status)}</p>
               <Link
                 href="/billing"
                 className="mt-4 inline-block rounded-md bg-teal-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-teal-800"
