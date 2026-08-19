@@ -15,6 +15,13 @@
       "when": 1787025595570,
       "tag": "0001_wild_peter_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787111049306,
+      "tag": "0002_regular_shiva",
+      "breakpoints": true
     }
   ]
 }

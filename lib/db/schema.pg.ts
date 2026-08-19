@@ -81,6 +81,12 @@ export const businesses = pgTable("businesses", {
   state: text("state"),
   phone: text("phone"),
   timezone: text("timezone").notNull().default("America/New_York"),
+  // Short, URL-safe identifier for the public review-request page
+  // (app/r/[slug]) — see lib/reviews/slug.ts. Nullable so this migration
+  // applies cleanly to existing rows; every business must end up with one
+  // (backfilled by scripts/backfill-business-slugs.ts) since the Review
+  // Requests feature hangs entirely off it.
+  slug: text("slug").unique(),
   createdAt: createdAt(),
 });
 
@@ -362,6 +368,34 @@ export const supportAppeals = pgTable("support_appeals", {
   accountId: text("account_id").references(() => accounts.id, { onDelete: "set null" }),
   businessId: text("business_id").references(() => businesses.id, { onDelete: "set null" }),
   appealType: text("appeal_type").notNull(), // "business_already_claimed" | "duplicate_business_signup"
+  message: text("message").notNull(),
+  createdAt: createdAt(),
+});
+
+// ---------------------------------------------------------------------------
+// Review Requests (QR code / landing page feature)
+// ---------------------------------------------------------------------------
+
+// Anonymous private feedback submitted from a practice's public review-
+// request page (app/r/[slug]) when a patient chooses "send private
+// feedback" instead of "leave a public review" — see docs/PROJECT-HANDOFF.md
+// and the Review Requests feature build for the full design rationale.
+//
+// This table has, and must never gain, a name/email/phone column (or any
+// other patient-identifying field). The entire feature is deliberately
+// built so that no patient-identifying information ever reaches Notabl's
+// servers — adding one here would make Notabl a HIPAA business associate
+// and trigger signed BAAs with every customer plus HIPAA-tier
+// infrastructure obligations across Supabase, Vercel, Resend, and Twilio
+// (~$1,300/month before the first customer). A future "let the practice
+// follow up with this patient" request is a pricing-tier and legal
+// conversation, not a schema change — don't quietly reintroduce it here.
+export const patientFeedback = pgTable("patient_feedback", {
+  id: id(),
+  businessId: text("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  rating: integer("rating"), // 1-5, optional — no pre-screening question forces this
   message: text("message").notNull(),
   createdAt: createdAt(),
 });

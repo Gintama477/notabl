@@ -19,12 +19,14 @@ import {
   feedback,
   prospects,
   supportAppeals,
+  patientFeedback,
 } from "@/lib/db/schema.pg";
 import { eq, desc, and, gte, lt, lte, ne, ilike, isNotNull } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
 import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
 import { DEFAULT_PLAN, PLANS } from "@/config/pricing";
+import { slugifyBusinessName, randomSlugSuffix } from "@/lib/reviews/slug";
 import { findProspects } from "@/lib/outreach/findProspects";
 import { fetchDomainEmails, pickBestEmail, hostnameOf } from "@/lib/outreach/findEmail";
 import { buildOutreachEmailSubject, buildOutreachDraftBody, buildOutreachEmailHtml, buildOutreachEmailText } from "@/lib/email/templates/outreachEmail";
@@ -58,6 +60,29 @@ export async function getAccountById(accountId: string) {
 }
 
 /**
+ * The one place a business's slug gets decided — used both at creation
+ * (createAccountWithDemoBusiness below, the single insertion point for both
+ * self-serve signup and admin pilot invites) and by
+ * scripts/backfill-business-slugs.ts for existing rows. Starts from the
+ * plain slugified name; only appends a random suffix if that's already
+ * taken, so most businesses get a clean, readable link.
+ */
+export async function generateUniqueBusinessSlug(name: string): Promise<string> {
+  const base = slugifyBusinessName(name);
+  const [existing] = await db.select({ id: businesses.id }).from(businesses).where(eq(businesses.slug, base)).limit(1);
+  if (!existing) return base;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = `${base}-${randomSlugSuffix()}`;
+    const [taken] = await db.select({ id: businesses.id }).from(businesses).where(eq(businesses.slug, candidate)).limit(1);
+    if (!taken) return candidate;
+  }
+  // Astronomically unlikely fallback if 5 random suffixes in a row all
+  // collided — a UUID fragment is guaranteed unique enough at this scale.
+  return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+/**
  * Creates the account/user/business, connects a "demo" review source, and
  * imports the bundled demo review dataset for that business. This is the
  * Phase 1 substitute for a real review-API import (see docs/ARCHITECTURE.md
@@ -74,6 +99,7 @@ export async function createAccountWithDemoBusiness(input: SignupInput) {
   const [account] = await db.insert(accounts).values({ email: input.email }).returning();
   await db.insert(users).values({ accountId: account.id, email: input.email });
 
+  const slug = await generateUniqueBusinessSlug(input.businessName);
   const [business] = await db
     .insert(businesses)
     .values({
@@ -83,6 +109,7 @@ export async function createAccountWithDemoBusiness(input: SignupInput) {
       website: input.website || null,
       city: input.city || null,
       state: input.state || null,
+      slug,
     })
     .returning();
 
@@ -899,4 +926,152 @@ export async function sendProspectEmail(id: string) {
     .where(eq(prospects.id, id));
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Review Requests (QR code / landing page feature)
+// ---------------------------------------------------------------------------
+
+export async function getBusinessBySlug(slug: string) {
+  const [row] = await db.select().from(businesses).where(eq(businesses.slug, slug)).limit(1);
+  return row ?? null;
+}
+
+/**
+ * True once at least one visitor has ever loaded this business's public
+ * review-request page. Backs the "Print your review request cards" prompt
+ * on app/dashboard/page.tsx — an unused feature justifies nothing, so that
+ * prompt only shows before the practice has actually put the QR/link in
+ * front of a single patient.
+ */
+export async function hasReviewRequestPageView(businessId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.businessId, businessId), eq(events.eventName, "review_request_page_viewed")))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * The Google "write a review" URL for a business's public review-request
+ * page — built from the Place ID already stored on its active "google"
+ * review source, not a separately-stored review-page URL, so there's only
+ * ever one place a Place ID lives. Returns null if the business hasn't
+ * connected a Google source yet (or it's been disconnected/paused), so
+ * callers can show a graceful "not set up yet" state instead of a dead
+ * link — see app/r/[slug]/page.tsx and app/dashboard/review-requests/page.tsx.
+ */
+export async function getGoogleWriteReviewUrl(businessId: string): Promise<string | null> {
+  const [source] = await db
+    .select({ sourceUrl: reviewSources.sourceUrl })
+    .from(reviewSources)
+    .where(
+      and(
+        eq(reviewSources.businessId, businessId),
+        eq(reviewSources.sourceType, "google"),
+        eq(reviewSources.status, "active")
+      )
+    )
+    .limit(1);
+  if (!source?.sourceUrl) return null;
+  return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(source.sourceUrl)}`;
+}
+
+/**
+ * Anonymous private feedback submitted from a practice's public
+ * review-request page (app/r/[slug]) when a patient chooses "send private
+ * feedback" instead of "leave a public review." See the comment above the
+ * patientFeedback table (lib/db/schema.pg.ts) for why this deliberately
+ * takes no name/email/phone — do not add one here either.
+ */
+export async function submitPatientFeedback(businessId: string, input: { rating: number | null; message: string }) {
+  const [row] = await db
+    .insert(patientFeedback)
+    .values({ businessId, rating: input.rating, message: input.message })
+    .returning();
+  return row;
+}
+
+export async function getPatientFeedbackForBusiness(businessId: string, limit = 100) {
+  return db
+    .select()
+    .from(patientFeedback)
+    .where(eq(patientFeedback.businessId, businessId))
+    .orderBy(desc(patientFeedback.createdAt))
+    .limit(limit);
+}
+
+export type ReviewRequestStats = {
+  pageViews: number;
+  publicClicks: number;
+  privateSubmissions: number;
+  newReviewsInWindow: number;
+  ratingBefore: number | null;
+  ratingNow: number | null;
+  reviewCountBefore: number;
+};
+
+// Below this many real reviews dated before the window start, an average
+// rating swings too wildly per-review to mean anything (a single review
+// moves a 3-review average by up to a third of a star) — the attribution
+// panel shows "not enough history yet" instead of a misleading decimal
+// below this threshold. See getReviewRequestStats.
+const MIN_REVIEWS_FOR_RATING_TREND = 5;
+
+/**
+ * Backs the Review Requests dashboard's attribution panel
+ * (app/dashboard/review-requests/page.tsx). Deliberately reports only
+ * counts measured over the same window — page views, public-review clicks,
+ * private feedback submissions, and new real reviews that arrived — never
+ * a claimed "reviews generated by Notabl" number. Scans and new reviews are
+ * correlated, not causally proven (someone could leave a review without
+ * ever scanning), and the dashboard page says so explicitly next to these
+ * numbers.
+ */
+export async function getReviewRequestStats(
+  businessId: string,
+  windowStart: string,
+  windowEnd: string
+): Promise<ReviewRequestStats> {
+  const eventRows = await db
+    .select({ eventName: events.eventName })
+    .from(events)
+    .where(and(eq(events.businessId, businessId), gte(events.createdAt, windowStart), lt(events.createdAt, windowEnd)));
+
+  const pageViews = eventRows.filter((e) => e.eventName === "review_request_page_viewed").length;
+  const publicClicks = eventRows.filter((e) => e.eventName === "review_request_public_clicked").length;
+  const privateSubmissions = eventRows.filter((e) => e.eventName === "review_request_private_submitted").length;
+
+  // Real reviews only (isDemoData = false) — a business still on demo data
+  // has no real Google reviews for this panel to attribute anything to.
+  const allReviews = await db
+    .select({ rating: reviews.rating, reviewDate: reviews.reviewDate })
+    .from(reviews)
+    .where(and(eq(reviews.businessId, businessId), eq(reviews.isDemoData, false)));
+
+  const newReviewsInWindow = allReviews.filter((r) => r.reviewDate >= windowStart && r.reviewDate < windowEnd).length;
+
+  const reviewsBefore = allReviews.filter((r) => r.reviewDate < windowStart);
+  const ratingBefore =
+    reviewsBefore.length >= MIN_REVIEWS_FOR_RATING_TREND
+      ? reviewsBefore.reduce((sum, r) => sum + r.rating, 0) / reviewsBefore.length
+      : null;
+  // "Now" is always the full current set (not bounded by windowEnd) — the
+  // point of the comparison is "where things stand today" vs. "where they
+  // stood before this window started."
+  const ratingNow =
+    reviewsBefore.length >= MIN_REVIEWS_FOR_RATING_TREND && allReviews.length > 0
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
+      : null;
+
+  return {
+    pageViews,
+    publicClicks,
+    privateSubmissions,
+    newReviewsInWindow,
+    ratingBefore,
+    ratingNow,
+    reviewCountBefore: reviewsBefore.length,
+  };
 }

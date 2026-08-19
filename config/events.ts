@@ -20,6 +20,9 @@ export const EVENT_NAMES = [
   "subscription_cancelled",
   "weekly_report_opened",
   "feedback_submitted",
+  "review_request_page_viewed",
+  "review_request_public_clicked",
+  "review_request_private_submitted",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
