@@ -7,6 +7,7 @@ import {
   getSampleReviewsForRun,
   getDashboardData,
   getSubscriptionForAccount,
+  getThemeExcerptsForRun,
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
@@ -39,6 +40,11 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
   // Purely a display-time check; the report row itself is untouched.
   const subscriptionInactive = !hasDemoData && !isActiveOrTrialing;
 
+  // A higher cap than the main dashboard's theme cards (4 vs 2) — the Full
+  // Report has room to be more thorough. Only needed when we're actually
+  // going to render the report below, but it's cheap enough to always fetch.
+  const excerptsByTheme = await getThemeExcerptsForRun(report.analysisRunId, 4);
+
   return (
     <>
       <BfcacheGuard />
@@ -60,7 +66,13 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
               </Link>
             </div>
           ) : (
-            <ReportBody businessName={business.name} report={report} sampleReviews={sampleReviews} />
+            <ReportBody
+              businessName={business.name}
+              report={report}
+              sampleReviews={sampleReviews}
+              excerptsByTheme={excerptsByTheme}
+              allReviewsHref="/dashboard/reviews"
+            />
           )}
         </div>
       </main>
