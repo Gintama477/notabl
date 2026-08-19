@@ -16,6 +16,10 @@ export default async function PricingPage() {
           <p className="mt-3 text-slate-600">
             One plan built for a single dental practice location. No setup fees.
           </p>
+          <p className="mt-2 text-slate-600">
+            Find out what patients think, and get more of them to say it publicly — analysis and a review-request
+            QR code, both included.
+          </p>
         </div>
 
         <div className="mx-auto mt-12 max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">

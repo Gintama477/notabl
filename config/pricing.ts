@@ -13,6 +13,8 @@ export const PLANS = {
       "Full dashboard: themes, trends, emerging issues",
       "Weekly email report",
       "Unlimited historical reports",
+      "Review request QR code and landing page",
+      "See how many new reviews your requests brought in",
       "Up to 1 business location",
     ],
     // Stripe price ID — set once you create the product in your Stripe dashboard.
