@@ -9,7 +9,7 @@
 
 import { db } from "@/lib/db/client";
 import { reviews, reviewThemeMentions, analysisRuns, themeRollups, weeklyReports, automationLogs } from "@/lib/db/schema.pg";
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, eq, gte, lt, asc } from "drizzle-orm";
 import { extractReviewThemes } from "@/lib/ai/extractReview";
 import { computeThemeRollups, ThemeMentionRecord } from "@/lib/ai/computeTrends";
 import { generateWeeklyNarrative } from "@/lib/ai/generateReportNarrative";
@@ -27,13 +27,44 @@ export async function runAnalysisForBusiness(
   businessId: string,
   businessName: string,
   periodEndISO: string,
-  periodLengthDays = 7
+  periodLengthDays = 7,
+  options?: { fullBackfill?: boolean }
 ): Promise<RunAnalysisResult> {
   const periodEnd = new Date(periodEndISO);
-  const periodStart = new Date(periodEnd);
-  periodStart.setUTCDate(periodStart.getUTCDate() - periodLengthDays);
-  const priorPeriodStart = new Date(periodStart);
-  priorPeriodStart.setUTCDate(priorPeriodStart.getUTCDate() - periodLengthDays);
+  let periodStart: Date;
+  let priorPeriodStart: Date;
+
+  if (options?.fullBackfill) {
+    // A business's very first real report should summarize everything
+    // imported so far, not just the last periodLengthDays — an established
+    // practice's Google reviews are almost always spread across years, so a
+    // plain 7-day window looks empty right after connecting even though
+    // every review was genuinely read by the AI extraction loop below.
+    // periodStart is the actual earliest review on file, queried, not
+    // guessed/hardcoded.
+    const [earliest] = await db
+      .select({ reviewDate: reviews.reviewDate })
+      .from(reviews)
+      .where(eq(reviews.businessId, businessId))
+      .orderBy(asc(reviews.reviewDate))
+      .limit(1);
+    periodStart = earliest ? new Date(earliest.reviewDate) : new Date(periodEnd);
+    if (!earliest) periodStart.setUTCDate(periodStart.getUTCDate() - periodLengthDays);
+
+    // There's no meaningful "prior period" to compare against on a first
+    // report. Setting priorPeriodStart equal to periodStart makes the
+    // prior-period window below zero-width, so priorPeriodReviews (and in
+    // turn priorMentions passed into computeThemeRollups) comes back empty
+    // on its own — every theme correctly shows as newly appearing rather
+    // than being compared against a window that doesn't represent anything
+    // real, without needing a separate code path for the rollup call.
+    priorPeriodStart = new Date(periodStart);
+  } else {
+    periodStart = new Date(periodEnd);
+    periodStart.setUTCDate(periodStart.getUTCDate() - periodLengthDays);
+    priorPeriodStart = new Date(periodStart);
+    priorPeriodStart.setUTCDate(priorPeriodStart.getUTCDate() - periodLengthDays);
+  }
 
   const startedAt = new Date().toISOString();
   const provider = getAIProvider();
