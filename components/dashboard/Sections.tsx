@@ -1,5 +1,6 @@
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
 import type { ThemeExcerpt } from "@/lib/db/queries";
+import { formatReviewText } from "@/lib/reviews/formatReviewText";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
 type Action = { title: string; detail: string };
@@ -22,8 +23,8 @@ function QuoteList({ quotes }: { quotes: ThemeExcerpt[] | undefined }) {
   return (
     <div className="mt-2 space-y-2">
       {quotes.map((q, i) => (
-        <blockquote key={i} className="border-l-2 border-slate-200 pl-3 text-sm italic text-slate-500">
-          &ldquo;{q.text}&rdquo;
+        <blockquote key={i} className="whitespace-pre-line border-l-2 border-slate-200 pl-3 text-sm italic text-slate-500">
+          &ldquo;{formatReviewText(q.text)}&rdquo;
           <footer className="mt-1 not-italic text-xs text-slate-400">
             <span aria-hidden className="text-amber-500">
               {"★".repeat(q.rating)}
@@ -37,7 +38,10 @@ function QuoteList({ quotes }: { quotes: ThemeExcerpt[] | undefined }) {
   );
 }
 
-function SectionCard({
+// Exported (not just used locally) so components/dashboard/NewThisWeek.tsx
+// — a separate client component, since it needs interactive expand/collapse
+// state that the rest of this file doesn't — can reuse the same card shell.
+export function SectionCard({
   title,
   accent,
   children,
@@ -84,44 +88,6 @@ export function WhatPatientsDislike({ items, excerptsByTheme }: { items: ThemeRe
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
           <p className="text-sm text-slate-600">{t.summary}</p>
           <QuoteList quotes={excerptsByTheme?.[t.category]} />
-        </div>
-      ))}
-    </SectionCard>
-  );
-}
-
-export type NewReview = {
-  id: string;
-  authorName: string | null;
-  rating: number;
-  reviewText: string;
-  reviewDate: string;
-};
-
-// Under the cumulative report model (see lib/analysis/runAnalysis.ts), the
-// theme sections above and below this one are built from the business's
-// full review history and are never empty — so this section is deliberately
-// the ONE honest, literal "what came in since last time" list. A quiet week
-// with zero new reviews is a completely normal, expected state here, not a
-// sign anything's broken.
-export function NewThisWeek({ reviews }: { reviews: NewReview[] }) {
-  return (
-    <SectionCard
-      title="New Reviews This Week"
-      accent="text-amber-800"
-      empty={reviews.length === 0}
-      emptyMessage="No new reviews since your last report."
-    >
-      {reviews.map((r) => (
-        <div key={r.id} className="border-l-2 border-amber-500 pl-3">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>{r.authorName?.trim() || "Anonymous"}</span>
-            <span aria-hidden className="text-amber-500">
-              {"★".repeat(r.rating)}
-              {"☆".repeat(Math.max(0, 5 - r.rating))}
-            </span>
-          </div>
-          <p className="mt-1 text-sm italic text-slate-600">&ldquo;{r.reviewText}&rdquo;</p>
         </div>
       ))}
     </SectionCard>

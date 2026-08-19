@@ -19,11 +19,11 @@ import { MetricsRow } from "@/components/dashboard/MetricsRow";
 import {
   WhatPatientsLove,
   WhatPatientsDislike,
-  NewThisWeek,
   IssuesGettingWorse,
   Opportunities,
   RecommendedActions,
 } from "@/components/dashboard/Sections";
+import { NewThisWeek } from "@/components/dashboard/NewThisWeek";
 import { RunAnalysisButton } from "@/components/dashboard/RunAnalysisButton";
 import { track } from "@/lib/analytics/track";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
@@ -82,8 +82,19 @@ export default async function DashboardPage() {
   // rollup, kept on the Full Report page instead, since the theme cards
   // above are never empty under the cumulative model and this is meant to
   // be the one honest, possibly-empty-on-a-quiet-week section).
+  //
+  // Deliberately NOT data.latestReport.periodStart/periodEnd — a business's
+  // latest report row can be a leftover from before the cumulative-report
+  // redesign (or just an old run reused by cost-control dedup because
+  // nothing's changed since), so its stored period isn't guaranteed to mean
+  // "the last 7 days." This section computes its own real trailing-7-day
+  // window instead of trusting whatever period happens to be on that row.
+  const newReviewsWindowEnd = new Date();
+  const newReviewsWindowStart = new Date(newReviewsWindowEnd);
+  newReviewsWindowStart.setUTCDate(newReviewsWindowStart.getUTCDate() - 7);
+
   const newReviews = data.latestReport
-    ? await getNewReviewsForRun(business.id, data.latestReport.periodStart, data.latestReport.periodEnd)
+    ? await getNewReviewsForRun(business.id, newReviewsWindowStart.toISOString(), newReviewsWindowEnd.toISOString())
     : [];
 
   return (
