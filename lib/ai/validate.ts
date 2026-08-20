@@ -84,3 +84,28 @@ export function narrativeReferencesOnlyKnownThemes(
   ];
   return refs.every((r) => knownCategories.has(r.category));
 }
+
+export const DraftReplySchema = z.object({ reply: z.string().min(1).max(600) });
+export type DraftReply = z.infer<typeof DraftReplySchema>;
+
+/**
+ * Belt-and-suspenders check behind lib/ai/prompts/draftReply.ts's "never
+ * use the reviewer's name" rule — a prompt instruction alone is not a
+ * guarantee, see the HIPAA-rail comment there for why this matters more
+ * than the usual "don't invent data" checks in this file. Checks each
+ * whitespace-separated part of the stored author name separately (a lone
+ * first name — "Thanks, Sarah!" — is the realistic failure mode, not
+ * always the full string), case-insensitive, skipping very short tokens
+ * (initials, "Dr.") that would false-positive on ordinary words. Returns
+ * false (nothing to check) for an anonymous review with no author name.
+ */
+export function replyContainsReviewerName(reply: string, authorName: string | null): boolean {
+  if (!authorName || !authorName.trim()) return false;
+  const nameParts = authorName
+    .trim()
+    .split(/\s+/)
+    .map((p) => p.replace(/[^\p{L}]/gu, ""))
+    .filter((p) => p.length >= 3);
+  const lowerReply = reply.toLowerCase();
+  return nameParts.some((part) => lowerReply.includes(part.toLowerCase()));
+}

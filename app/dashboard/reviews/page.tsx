@@ -6,11 +6,13 @@ import {
   getDashboardData,
   getSubscriptionForAccount,
   getPaginatedReviewsForBusiness,
+  getGoogleReviewsManageUrl,
   ReviewRatingFilter,
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
+import { DraftReplyButton } from "@/components/dashboard/DraftReplyButton";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
 import { formatReviewText } from "@/lib/reviews/formatReviewText";
 
@@ -54,6 +56,10 @@ export default async function ReviewsPage({
     !data.hasDemoData && !subscriptionInactive
       ? await getPaginatedReviewsForBusiness(business.id, { page, pageSize: 25, ratingFilter })
       : null;
+
+  // One lookup for the whole page, not per review — same active "google"
+  // review source backs every review shown here.
+  const googleReviewsUrl = result ? await getGoogleReviewsManageUrl(business.id) : null;
 
   function pageHref(nextPage: number, nextRating: ReviewRatingFilter) {
     const params = new URLSearchParams();
@@ -139,6 +145,7 @@ export default async function ReviewsPage({
                         </span>
                       </div>
                       <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{formatReviewText(r.reviewText)}</p>
+                      <DraftReplyButton reviewId={r.id} googleReviewsUrl={googleReviewsUrl} />
                     </div>
                   ))}
                 </div>

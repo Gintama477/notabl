@@ -5,16 +5,18 @@
 // is a config change (set ANTHROPIC_API_KEY), not a code change.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { ReviewExtraction, ReviewExtractionSchema, WeeklyNarrative, WeeklyNarrativeSchema } from "./validate";
+import { ReviewExtraction, ReviewExtractionSchema, WeeklyNarrative, WeeklyNarrativeSchema, DraftReplySchema } from "./validate";
 import { buildExtractReviewPrompt, EXTRACT_REVIEW_PROMPT_VERSION } from "./prompts/extractReview";
 import { buildNarrativePrompt, GENERATE_NARRATIVE_PROMPT_VERSION } from "./prompts/generateNarrative";
-import { demoAnalyzeReview, demoGenerateNarrative } from "./demoProvider";
+import { buildDraftReplyPrompt } from "./prompts/draftReply";
+import { demoAnalyzeReview, demoGenerateNarrative, demoDraftReply } from "./demoProvider";
 
 export interface AIProvider {
   name: string;
   promptVersion: string;
   analyzeReview(reviewText: string, rating: number): Promise<ReviewExtraction>;
   generateNarrative(structuredRollupJson: string, businessName: string): Promise<WeeklyNarrative>;
+  draftReply(reviewText: string, rating: number, businessName: string): Promise<string>;
 }
 
 class ClaudeProvider implements AIProvider {
@@ -47,6 +49,11 @@ class ClaudeProvider implements AIProvider {
     const raw = await this.callJson(buildNarrativePrompt(structuredRollupJson, businessName));
     return WeeklyNarrativeSchema.parse(raw);
   }
+
+  async draftReply(reviewText: string, rating: number, businessName: string): Promise<string> {
+    const raw = await this.callJson(buildDraftReplyPrompt(reviewText, rating, businessName));
+    return DraftReplySchema.parse(raw).reply;
+  }
 }
 
 class DemoProvider implements AIProvider {
@@ -59,6 +66,10 @@ class DemoProvider implements AIProvider {
 
   async generateNarrative(structuredRollupJson: string, businessName: string): Promise<WeeklyNarrative> {
     return demoGenerateNarrative(structuredRollupJson, businessName);
+  }
+
+  async draftReply(_reviewText: string, rating: number, _businessName: string): Promise<string> {
+    return demoDraftReply(rating);
   }
 }
 

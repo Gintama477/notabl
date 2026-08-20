@@ -20,6 +20,7 @@ import {
   prospects,
   supportAppeals,
   patientFeedback,
+  reviewReplies,
 } from "@/lib/db/schema.pg";
 import { eq, desc, and, gte, lt, lte, ne, ilike, isNotNull } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
@@ -1018,6 +1019,52 @@ export async function getGoogleWriteReviewUrl(businessId: string): Promise<strin
     .limit(1);
   if (!source?.sourceUrl) return null;
   return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(source.sourceUrl)}`;
+}
+
+/**
+ * Where a practice OWNER goes to find and reply to their reviews — a
+ * different Google URL from getGoogleWriteReviewUrl above (which is the
+ * patient-facing "leave a review" link). Google doesn't expose a stable
+ * public per-review permalink to deep-link into, so this points at the
+ * owner's reviews list for the business, which is the accurate "go find it
+ * and reply" destination — see components/dashboard/DraftReplyButton.tsx.
+ */
+export async function getGoogleReviewsManageUrl(businessId: string): Promise<string | null> {
+  const [source] = await db
+    .select({ sourceUrl: reviewSources.sourceUrl })
+    .from(reviewSources)
+    .where(
+      and(
+        eq(reviewSources.businessId, businessId),
+        eq(reviewSources.sourceType, "google"),
+        eq(reviewSources.status, "active")
+      )
+    )
+    .limit(1);
+  if (!source?.sourceUrl) return null;
+  return `https://search.google.com/local/reviews?placeid=${encodeURIComponent(source.sourceUrl)}`;
+}
+
+export async function getReviewById(reviewId: string) {
+  const [row] = await db.select().from(reviews).where(eq(reviews.id, reviewId)).limit(1);
+  return row ?? null;
+}
+
+export async function getReviewReply(reviewId: string) {
+  const [row] = await db.select().from(reviewReplies).where(eq(reviewReplies.reviewId, reviewId)).limit(1);
+  return row ?? null;
+}
+
+/**
+ * Backs "Draft a reply" (app/api/reviews/[id]/draft-reply/route.ts) —
+ * reviewId is unique on this table by design, so a second draft attempt on
+ * the same review is a caller bug, not a state this needs to handle
+ * gracefully (the route always checks getReviewReply first and returns the
+ * existing draft instead of calling this again).
+ */
+export async function saveReviewReply(reviewId: string, draftText: string) {
+  const [row] = await db.insert(reviewReplies).values({ reviewId, draftText }).returning();
+  return row;
 }
 
 /**

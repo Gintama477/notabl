@@ -263,3 +263,19 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     ],
   };
 }
+
+// Deterministic, $0-cost reply drafts — same rating-only branching a real
+// provider would land on, and follows every rule in
+// lib/ai/prompts/draftReply.ts (no patient confirmation, no treatment
+// detail, no reviewer name, no dispute) by construction, since neither
+// template ever looks at the review text or author name at all. Exercises
+// the whole "Draft a reply" pipeline (route, validation, storage) with zero
+// API cost when no ANTHROPIC_API_KEY is configured.
+const DEMO_REPLY_POSITIVE =
+  "Thank you for taking the time to share your feedback. Our team is committed to providing a welcoming, high-quality experience for everyone, and we appreciate hearing from you.";
+const DEMO_REPLY_NEGATIVE =
+  "Thank you for sharing your feedback. We take all feedback seriously and would welcome the chance to discuss this further — please reach out to our office directly.";
+
+export async function demoDraftReply(rating: number): Promise<string> {
+  return rating <= 3 ? DEMO_REPLY_NEGATIVE : DEMO_REPLY_POSITIVE;
+}

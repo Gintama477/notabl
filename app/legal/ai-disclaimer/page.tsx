@@ -31,6 +31,16 @@ export default function AIDisclaimerPage() {
             technical description of this process.
           </p>
 
+          <h2>Drafted Review Replies</h2>
+          <p>
+            The &ldquo;Draft a reply&rdquo; suggestions are exactly that — suggestions, not something Notabl
+            posts on your behalf. They are deliberately worded in general terms and never confirm that a
+            reviewer was a patient, reference any treatment or visit detail, or use the reviewer&apos;s name,
+            even when the review itself states them, because doing so can violate HIPAA regardless of what
+            the reviewer chose to disclose. You are responsible for reviewing and editing any draft before
+            publishing it under your practice&apos;s name.
+          </p>
+
           <h2>Human Judgment Still Matters</h2>
           <p>
             Notabl is a decision-support tool, not a decision-maker. Recommendations are suggestions based

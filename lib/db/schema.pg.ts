@@ -411,3 +411,28 @@ export const patientFeedback = pgTable("patient_feedback", {
   message: text("message").notNull(),
   createdAt: createdAt(),
 });
+
+// ---------------------------------------------------------------------------
+// AI-Drafted Review Replies
+// ---------------------------------------------------------------------------
+
+// One drafted reply per review, generated on demand (never on ingest — see
+// app/api/reviews/[id]/draft-reply/route.ts) and cached here so a second
+// "Draft a reply" click on the same review returns the stored draft instead
+// of paying for another AI call. draftText is deliberately generic by
+// design (see lib/ai/prompts/draftReply.ts for the HIPAA reasoning) and
+// validated to contain no reviewer name before it's ever written here (see
+// lib/ai/draftReply.ts).
+//
+// Same rule as patient_feedback above: no patient-identifying column here,
+// and none should ever be added. A drafted reply is about the REVIEW, not
+// the reviewer — reviewId is the only link this table needs.
+export const reviewReplies = pgTable("review_replies", {
+  id: id(),
+  reviewId: text("review_id")
+    .notNull()
+    .unique()
+    .references(() => reviews.id, { onDelete: "cascade" }),
+  draftText: text("draft_text").notNull(),
+  createdAt: createdAt(),
+});
