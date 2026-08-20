@@ -140,6 +140,28 @@ export default async function AdminPage({
           />
         </Section>
 
+        <Section title="Review Analysis Status">
+          <div className="p-4">
+            <p className="mb-3 text-sm text-slate-600">
+              Current provider version: <code className="rounded bg-slate-100 px-1.5 py-0.5">{data.currentAnalysisVersion}</code>.
+              Per business, how many real reviews are analyzed with THIS version versus stale (analyzed by an older
+              provider/prompt version, or never analyzed) — this is how to confirm a provider switchover (e.g.
+              setting ANTHROPIC_API_KEY and moving off the keyword-matching DemoProvider) actually finished, rather
+              than guessing from the dashboard. A business isn&apos;t &ldquo;done&rdquo; until Stale reads 0; run
+              analysis again (from the dashboard or via Connect Real Google Reviews below) to make progress on the
+              rest.
+            </p>
+            {data.reviewAnalysisStatus.length === 0 ? (
+              <p className="text-sm text-slate-400">No businesses with real (non-demo) reviews yet.</p>
+            ) : (
+              <Table
+                columns={["Business", "Current version", "Stale", "Total"]}
+                rows={data.reviewAnalysisStatus.map((r) => [r.businessName, String(r.current), String(r.stale), String(r.total)])}
+              />
+            )}
+          </div>
+        </Section>
+
         <Section title={`Support Appeals (${data.supportAppeals.length})`}>
           {data.supportAppeals.length === 0 ? (
             <p className="p-4 text-sm text-slate-400">

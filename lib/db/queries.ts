@@ -27,6 +27,7 @@ import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
 import { DEFAULT_PLAN, PLANS } from "@/config/pricing";
 import { slugifyBusinessName, randomSlugSuffix } from "@/lib/reviews/slug";
+import { getAIProvider } from "@/lib/ai/provider";
 import { findProspects } from "@/lib/outreach/findProspects";
 import { fetchDomainEmails, pickBestEmail, hostnameOf } from "@/lib/outreach/findEmail";
 import { buildOutreachEmailSubject, buildOutreachDraftBody, buildOutreachEmailHtml, buildOutreachEmailText } from "@/lib/email/templates/outreachEmail";
@@ -667,6 +668,27 @@ export async function getAdminOverview() {
   const wouldPayPct = payAnswers.length > 0 ? Math.round((payAnswers.filter((v) => v === "yes").length / payAnswers.length) * 1000) / 10 : null;
   const sampleReportViews = eventCounts("sample_report_viewed");
 
+  // Per business: how many real reviews are analyzed with the CURRENTLY
+  // active provider version vs. stale (analyzed by an older/different
+  // provider, or never analyzed) — see the analyzedWith comment in
+  // lib/db/schema.pg.ts and the re-analysis logic in
+  // lib/analysis/runAnalysis.ts. This is the one place to actually confirm
+  // a provider switchover (e.g. setting ANTHROPIC_API_KEY and moving off
+  // the keyword-matching DemoProvider) has FINISHED for a business, rather
+  // than guessing from the dashboard — and it makes any future prompt-
+  // version rollout visible instead of invisible.
+  const activeProvider = getAIProvider();
+  const currentAnalysisVersion = `${activeProvider.name}/${activeProvider.promptVersion}`;
+  const allRealReviews = await db.select().from(reviews).where(eq(reviews.isDemoData, false));
+  const reviewAnalysisStatus = allBusinesses
+    .map((b) => {
+      const businessReviews = allRealReviews.filter((r) => r.businessId === b.id);
+      if (businessReviews.length === 0) return null;
+      const current = businessReviews.filter((r) => r.analyzedWith === currentAnalysisVersion).length;
+      return { businessId: b.id, businessName: b.name, current, stale: businessReviews.length - current, total: businessReviews.length };
+    })
+    .filter((row): row is { businessId: string; businessName: string; current: number; stale: number; total: number } => row !== null);
+
   return {
     accountCount: allAccounts.length,
     accounts: allAccounts,
@@ -691,6 +713,8 @@ export async function getAdminOverview() {
     wouldPayPct,
     sampleReportViews,
     supportAppeals: allSupportAppeals,
+    currentAnalysisVersion,
+    reviewAnalysisStatus,
   };
 }
 
