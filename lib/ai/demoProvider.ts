@@ -183,7 +183,19 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     .sort((a, b) => b.negativeCount - a.negativeCount)
     .slice(0, 4);
 
-  const emerging = rollup.themes.filter((t) => t.trendDirection === "new").slice(0, 5);
+  // trendDirection === "new" alone isn't enough — that's true of any theme
+  // with zero mentions one period ago, regardless of sentiment, and this
+  // list feeds "Emerging Issues" and "Recommended Actions" (both implicitly
+  // framed as problems to look into). Without the same negativeCount filter
+  // negativeThemes uses just above, a newly-appearing POSITIVE theme (e.g.
+  // overwhelming praise for professionalism that just started showing up)
+  // gets told to the owner as something to "investigate... before it
+  // becomes a pattern," which is backwards. A newly-emerging positive theme
+  // is still worth surfacing — it belongs in topPositiveThemes/Opportunities
+  // (computed separately above), never here.
+  const emerging = rollup.themes
+    .filter((t) => t.trendDirection === "new" && t.negativeCount > 0 && t.negativeCount >= t.positiveCount)
+    .slice(0, 5);
   const worsening = rollup.themes.filter((t) => t.trendDirection === "increasing" && t.negativeCount > 0);
 
   const topPositiveThemes = positiveThemes.map((t) => ({
