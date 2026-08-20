@@ -4,27 +4,67 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 
+// runAnalysisForBusiness's extraction loop is wall-clock budgeted (~45s per
+// call — see EXTRACTION_BUDGET_MS in lib/analysis/runAnalysis.ts), so one
+// click on a business with a lot of reviews (e.g. right after
+// ANTHROPIC_API_KEY gets set and everything needs re-analyzing with real
+// Claude instead of the keyword-matching DemoProvider) won't finish in a
+// single request. Rather than stop and make the owner click repeatedly,
+// this keeps calling the endpoint automatically while reviewsRemaining > 0.
+// MAX_ROUNDS is a backstop so a persistent failure (or a runaway edge case)
+// can't loop forever — not a number expected to be hit in normal use.
+const MAX_ROUNDS = 20;
+
 export function RunAnalysisButton() {
   const router = useRouter();
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ analyzed: number; total: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function handleClick() {
     setRunning(true);
     setMessage(null);
+    setProgress(null);
+    let totalAnalyzed = 0;
+
     try {
-      const res = await fetch("/api/analysis/run", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setMessage(data.error || "Analysis failed.");
-      } else {
-        setMessage(`Done — ${data.reviewsNewlyAnalyzed} new review(s) analyzed.`);
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        const res = await fetch("/api/analysis/run", { method: "POST" });
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          if (res.status === 429) {
+            setMessage(
+              `${data?.error || "Rate limited."} ${totalAnalyzed} review(s) analyzed so far — click again in a few minutes to continue.`
+            );
+          } else {
+            setMessage(data?.error || "Analysis failed.");
+          }
+          return;
+        }
+
+        totalAnalyzed += data.reviewsNewlyAnalyzed;
+        const remaining = data.reviewsRemaining ?? 0;
+
+        if (remaining > 0) {
+          setProgress({ analyzed: totalAnalyzed, total: totalAnalyzed + remaining });
+          continue; // next round, automatically
+        }
+
+        setMessage(`Done — ${totalAnalyzed} review(s) analyzed.`);
         router.refresh();
+        return;
       }
+
+      // Hit MAX_ROUNDS without finishing — still real progress, just say so
+      // plainly rather than implying it's actually done.
+      setMessage(`Analyzed ${totalAnalyzed} review(s) so far — click "Run Analysis Now" again to continue.`);
+      router.refresh();
     } catch {
-      setMessage("Analysis failed. Please try again.");
+      setMessage(`Analysis failed${totalAnalyzed > 0 ? ` after analyzing ${totalAnalyzed} review(s)` : ""}. Please try again.`);
     } finally {
       setRunning(false);
+      setProgress(null);
     }
   }
 
@@ -37,7 +77,7 @@ export function RunAnalysisButton() {
       >
         {running ? (
           <>
-            Running analysis…
+            {progress ? `Analyzing your reviews… ${progress.analyzed} of ${progress.total}` : "Running analysis…"}
             <LoadingDots color="slate" />
           </>
         ) : (

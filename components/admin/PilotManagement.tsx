@@ -116,23 +116,38 @@ export function PilotInviteForm() {
 
 export type ConnectableBusiness = { id: string; name: string };
 
+// See the matching comment on components/dashboard/RunAnalysisButton.tsx —
+// same wall-clock-budgeted extraction loop, same reason for looping
+// automatically instead of a single request, same backstop.
+const MAX_ANALYSIS_ROUNDS = 20;
+
 /**
  * Connects a practice's real Google reviews via the temporary
  * Outscraper-backed provider (see docs/REVIEW-DATA-PROVIDERS.md) — paste in
  * a business and its Google Place ID, and their dashboard switches from
  * demo data to their own real reviews within moments. Safe to run again
  * later on the same business to pick up new reviews since the last sync.
+ *
+ * The initial connect (POST .../reviews/connect-google) also runs one
+ * analysis pass, but a large business won't fully analyze in that single
+ * ~45s-budgeted pass. If it comes back with reviewsRemaining > 0, this
+ * keeps going automatically via /api/admin/analysis/run — a plain
+ * re-analysis endpoint that does NOT re-trigger connectGoogleReviewSource
+ * (a real Outscraper call with its own cooldown), so continuing doesn't
+ * re-fetch reviews or risk hitting that cooldown.
  */
 export function ConnectGoogleReviewsForm({ businesses }: { businesses: ConnectableBusiness[] }) {
   const router = useRouter();
   const [businessId, setBusinessId] = useState("");
   const [placeId, setPlaceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<{ analyzed: number; total: number } | null>(null);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setProgress(null);
     setResult(null);
     try {
       const res = await fetch("/api/admin/reviews/connect-google", {
@@ -143,15 +158,53 @@ export function ConnectGoogleReviewsForm({ businesses }: { businesses: Connectab
       const data = await res.json();
       if (!res.ok) {
         setResult({ ok: false, message: data.error?.formErrors?.[0] || data.error || "Connection failed." });
-      } else {
-        setResult({ ok: true, message: `Imported ${data.imported} new review(s), skipped ${data.skipped} already-synced.` });
-        setPlaceId("");
-        router.refresh();
+        return;
       }
+
+      const importedMessage = `Imported ${data.imported} new review(s), skipped ${data.skipped} already-synced.`;
+      let totalAnalyzed = data.reviewsNewlyAnalyzed ?? 0;
+      let remaining = data.reviewsRemaining ?? 0;
+      setPlaceId("");
+
+      for (let round = 0; remaining > 0 && round < MAX_ANALYSIS_ROUNDS; round++) {
+        setProgress({ analyzed: totalAnalyzed, total: totalAnalyzed + remaining });
+        const runRes = await fetch("/api/admin/analysis/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessId }),
+        });
+        const runData = await runRes.json().catch(() => null);
+
+        if (!runRes.ok) {
+          const reason = runRes.status === 429 ? runData?.error || "Rate limited." : runData?.error || "Analysis failed.";
+          setResult({ ok: true, message: `${importedMessage} Analyzed ${totalAnalyzed} review(s) so far, then stopped: ${reason}` });
+          router.refresh();
+          return;
+        }
+
+        totalAnalyzed += runData.reviewsNewlyAnalyzed ?? 0;
+        remaining = runData.reviewsRemaining ?? 0;
+      }
+
+      setResult({
+        ok: true,
+        message:
+          remaining > 0
+            ? // Deliberately NOT "connect again" — re-submitting this form
+              // with the same Place ID inside its 10-minute resync cooldown
+              // (connectGoogleReviewSource) would fail outright. Progress
+              // continues on its own next time: this business's dashboard
+              // "Run Analysis Now" loops the same way, or reconnecting here
+              // once the cooldown has passed.
+              `${importedMessage} Analyzed ${totalAnalyzed} review(s) so far — ${remaining} still to go. This will keep catching up on the next analysis run (their dashboard, or reconnecting here once the resync cooldown passes).`
+            : `${importedMessage} Analyzed ${totalAnalyzed} review(s).`,
+      });
+      router.refresh();
     } catch {
       setResult({ ok: false, message: "Connection failed. Please try again." });
     } finally {
       setSubmitting(false);
+      setProgress(null);
     }
   }
 
@@ -184,7 +237,7 @@ export function ConnectGoogleReviewsForm({ businesses }: { businesses: Connectab
       >
         {submitting ? (
           <>
-            Connecting…
+            {progress ? `Analyzing… ${progress.analyzed} of ${progress.total}` : "Connecting…"}
             <LoadingDots />
           </>
         ) : (
