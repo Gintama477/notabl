@@ -18,6 +18,13 @@ import {
 import { buildLoginEmailHtml, buildLoginEmailText, buildLoginEmailSubject } from "./templates/loginEmail";
 import { buildWelcomeEmailHtml, buildWelcomeEmailText, buildWelcomeEmailSubject, WelcomeEmailInput } from "./templates/welcomeEmail";
 import { buildPilotInviteEmailHtml, buildPilotInviteEmailText, buildPilotInviteEmailSubject, PilotInviteEmailInput } from "./templates/pilotInviteEmail";
+import { buildReviewAlertEmailHtml, buildReviewAlertEmailText, buildReviewAlertEmailSubject, ReviewAlertEmailInput } from "./templates/reviewAlertEmail";
+import {
+  buildMonthlySummaryEmailHtml,
+  buildMonthlySummaryEmailText,
+  buildMonthlySummaryEmailSubject,
+  MonthlySummaryEmailInput,
+} from "./templates/monthlySummaryEmail";
 
 export async function sendWeeklyReportEmail(opts: {
   businessId: string;
@@ -304,6 +311,118 @@ export async function sendLoginEmail(opts: {
       businessId: opts.businessId,
       recipientEmail: opts.recipientEmail,
       emailType: "login",
+      status: "failed",
+      errorMessage: String(err),
+    });
+    throw err;
+  }
+}
+
+/**
+ * Triggered alert — replaces the old calendar-scheduled weekly report (see
+ * lib/alerts/reviewAlerts.ts for what decides whether/when to call this;
+ * this function only sends and records, it never decides). Same demo-mode
+ * fallback as every sender above.
+ */
+export async function sendReviewAlertEmail(opts: {
+  businessId: string;
+  recipientEmail: string;
+  input: ReviewAlertEmailInput;
+}) {
+  const subject = buildReviewAlertEmailSubject(opts.input);
+  const html = buildReviewAlertEmailHtml(opts.input);
+  const text = buildReviewAlertEmailText(opts.input);
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
+
+  if (!apiKey) {
+    console.log(`[demo email] Would send "${subject}" to ${opts.recipientEmail}`);
+    await db.insert(emailDeliveries).values({
+      businessId: opts.businessId,
+      recipientEmail: opts.recipientEmail,
+      emailType: "review_alert",
+      status: "queued",
+      errorMessage: "RESEND_API_KEY not configured — logged instead of sent (demo mode).",
+    });
+    return { sent: false, demo: true };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const result = await resend.emails.send({ from: `${fromName} <${fromAddress}>`, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
+    await db.insert(emailDeliveries).values({
+      businessId: opts.businessId,
+      recipientEmail: opts.recipientEmail,
+      emailType: "review_alert",
+      status: "sent",
+      resendMessageId: result.data?.id ?? null,
+      sentAt: new Date().toISOString(),
+    });
+    return { sent: true, demo: false };
+  } catch (err) {
+    await db.insert(emailDeliveries).values({
+      businessId: opts.businessId,
+      recipientEmail: opts.recipientEmail,
+      emailType: "review_alert",
+      status: "failed",
+      errorMessage: String(err),
+    });
+    throw err;
+  }
+}
+
+/**
+ * The 30-day-silence fallback (see lib/alerts/reviewAlerts.ts) — recorded
+ * as emailType "monthly_summary" so the 30-day check keys off any email to
+ * the business, not just alerts specifically. Same demo-mode fallback as
+ * every sender above.
+ */
+export async function sendMonthlySummaryEmail(opts: {
+  businessId: string;
+  recipientEmail: string;
+  input: MonthlySummaryEmailInput;
+}) {
+  const subject = buildMonthlySummaryEmailSubject(opts.input);
+  const html = buildMonthlySummaryEmailHtml(opts.input);
+  const text = buildMonthlySummaryEmailText(opts.input);
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
+
+  if (!apiKey) {
+    console.log(`[demo email] Would send "${subject}" to ${opts.recipientEmail}`);
+    await db.insert(emailDeliveries).values({
+      businessId: opts.businessId,
+      recipientEmail: opts.recipientEmail,
+      emailType: "monthly_summary",
+      status: "queued",
+      errorMessage: "RESEND_API_KEY not configured — logged instead of sent (demo mode).",
+    });
+    return { sent: false, demo: true };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const result = await resend.emails.send({ from: `${fromName} <${fromAddress}>`, to: opts.recipientEmail, replyTo: replyToAddress, subject, html, text });
+    await db.insert(emailDeliveries).values({
+      businessId: opts.businessId,
+      recipientEmail: opts.recipientEmail,
+      emailType: "monthly_summary",
+      status: "sent",
+      resendMessageId: result.data?.id ?? null,
+      sentAt: new Date().toISOString(),
+    });
+    return { sent: true, demo: false };
+  } catch (err) {
+    await db.insert(emailDeliveries).values({
+      businessId: opts.businessId,
+      recipientEmail: opts.recipientEmail,
+      emailType: "monthly_summary",
       status: "failed",
       errorMessage: String(err),
     });

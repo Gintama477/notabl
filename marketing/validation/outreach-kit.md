@@ -88,7 +88,7 @@ has time to read through what they actually say.
 I built a small tool called Notabl that covers both. You get a QR code for
 the front desk that lets a patient leave a Google review in a couple of
 taps, and every review that comes in gets turned into a plain-language
-weekly summary — what's going well, what's coming up more often, and what's
+alert email — what's going well, what's coming up more often, and what's
 new.
 
 It's $49/month, no contract and no sales call — less than most tools in this
@@ -130,7 +130,7 @@ just built on example data so you can see it without signing up for
 anything.
 
 The short version of the whole thing: a QR code that makes it easy for
-patients to leave a review, and a weekly read on what those reviews say.
+patients to leave a review, and an alert the moment one needs your attention.
 If neither is a priority right now, totally understand. Happy to check back
 down the road, or feel free to reach out any time at {{sender_email}} if it
 becomes useful.
@@ -145,7 +145,7 @@ Wishing you and the practice well either way.
 
 Hi {{first_name}} — I build a small tool (Notabl) for dental practices that
 does two things: a QR code for the front desk so patients can leave a Google
-review in a couple of taps, and a plain-language weekly summary of what all
+review in a couple of taps, and a plain-language alert email of what all
 those reviews actually say, so they're not just piling up unread. Not
 selling anything here, just curious if it'd be useful — here's a sample
 report if you want to see the format: {{sample_report_link}}
@@ -157,7 +157,7 @@ report if you want to see the format: {{sample_report_link}}
 "Notabl does two things. First, you get a QR code for the front desk or
 checkout counter — a patient scans it and can leave a Google review in a
 couple of taps, or send you private feedback instead; they pick. Second,
-every review that comes in gets read and turned into a short weekly summary:
+every review that comes in gets read and turned into a short alert email:
 what patients keep praising, what complaints are coming up, anything new or
 getting worse. Most practices buy those two things separately, if they buy
 the second one at all — this is $49 a month for both, no contract. It's not
@@ -169,7 +169,7 @@ instead of thirty."
 
 "Notabl gives your practice a QR code that makes it easy for patients to
 leave a review, then reads every review that comes in and sends you a
-plain-language weekly summary of what's going well, what's not, and what's
+plain-language alert email of what's going well, what's not, and what's
 changing. So you're not just collecting reviews nobody reads, and you catch
 a small problem before it becomes a pattern."
 
@@ -198,7 +198,7 @@ invitation to a free pilot, and it should sound like one.
 "I'm testing this with a small number of practices before opening it up
 more broadly, and I'd like to give {{practice_name}} free access — no
 cost, no obligation to continue. You'd get the review-request QR code and
-the weekly analysis, both. All I'd ask is honest feedback: whether it's
+ongoing analysis, both. All I'd ask is honest feedback: whether it's
 actually useful, what's confusing, and whether it's something you'd ever
 pay for. I can set your dashboard up in a couple minutes whenever you're
 ready."

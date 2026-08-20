@@ -9,9 +9,9 @@ export const PLANS = {
     priceMonthlyUsd: 49,
     trialDays: 7,
     features: [
-      "Weekly automated review analysis",
+      "Automated review analysis, checked daily",
       "Full dashboard: themes, trends, emerging issues",
-      "Weekly email report",
+      "Email alerts when a new review needs your attention",
       "Unlimited historical reports",
       "Review request QR code and landing page",
       "See how many new reviews your requests brought in",

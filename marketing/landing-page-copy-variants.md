@@ -29,7 +29,7 @@ telling you.
 
 **Subheadline:** Share a QR code at the front desk, and patients can leave a
 Google review in a couple of taps. Notabl reads every review that comes in
-and sends you a plain-language weekly report on what they add up to.
+and emails you a plain-language alert on what they add up to.
 
 **Angle:** The pairing, stated plainly, with the loop named in the subhead.
 The safest default: it answers "what is this" completely in two lines and
@@ -42,7 +42,7 @@ differentiates from single-purpose competitors immediately.
 **Headline:** Collecting reviews isn't the same as reading them.
 
 **Subheadline:** Notabl does both — a QR code that makes leaving a review
-easy for your patients, and a weekly summary of what all of them actually
+easy for your patients, and an alert about what they actually
 say, so they're not just piling up unread.
 
 **Angle:** Aimed squarely at practices who already use a review-generation
@@ -58,7 +58,7 @@ it head-on.
 
 **Subheadline:** Review requests and review analysis, together, for
 $49/month — no contract, no sales call. Patients leave reviews from a QR
-code at your front desk; you get a plain-language weekly read on what they
+code at your front desk; you get a plain-language alert on what they
 said.
 
 **Angle:** Price and consolidation. Best where the prospect is
@@ -73,7 +73,7 @@ Strongest response to "we already use Podium."
 marketing teams.
 
 **Subheadline:** No dashboards to learn, no jargon, no onboarding project.
-A QR code for the front desk, and a clear weekly summary of what your
+A QR code for the front desk, and a clear alert on what your
 patients said.
 
 **Angle:** Simplicity / anti-complexity. Best for owners skeptical of
@@ -88,7 +88,7 @@ sink to learn or a contract to escape.
 they said.
 
 **Subheadline:** Notabl gives your practice a QR code patients can scan at
-checkout, and turns every review that comes in into a weekly read on what's
+checkout, and turns every review that comes in into an alert on what's
 going well, what's coming up more often, and what's new.
 
 **Angle:** Sequential and concrete — describes the loop as two actions the

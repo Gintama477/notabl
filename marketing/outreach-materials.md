@@ -70,7 +70,7 @@ has time to read through what they actually say.
 I built a small tool called Notabl that covers both. You get a QR code for
 the front desk that lets a patient leave a Google review in a couple of
 taps, and every review that comes in gets turned into a plain-language
-weekly summary — what's going well, what's coming up more often, and what's
+alert email — what's going well, what's coming up more often, and what's
 new.
 
 It's $49/month, no contract and no sales call — less than most tools in this
@@ -110,7 +110,7 @@ Last note from me — here's that sample report again in case it's useful:
 built on example data so you can see it without signing up for anything.
 
 The short version of the whole thing: a QR code that makes it easy for
-patients to leave a review, and a weekly read on what those reviews say.
+patients to leave a review, and an alert the moment one needs your attention.
 If neither is a priority right now, totally understand. Happy to check back
 down the road, or feel free to reach out any time at {{sender_email}} if it
 becomes useful.
@@ -125,7 +125,7 @@ Wishing you and the practice well either way.
 
 Hi {{first_name}} — I build a small tool (Notabl) for dental practices that
 does two things: a QR code for the front desk so patients can leave a Google
-review in a couple of taps, and a plain-language weekly summary of what all
+review in a couple of taps, and a plain-language alert email of what all
 those reviews actually say, so they're not just piling up unread. Not
 selling anything here, just curious if it'd be useful — here's a sample
 report if you want to see the format: {{sample_report_link}}

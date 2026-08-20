@@ -11,9 +11,9 @@ export function CtaSection() {
           {formatPrice(plan.priceMonthlyUsd)}/month, cancel anytime
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-slate-600">
-          One plan, no hidden tiers, no sales call — review requests and the
-          weekly analysis both included. Start with a free sample report — no
-          signup needed — then try the full dashboard for {plan.trialDays} days.
+          One plan, no hidden tiers, no sales call — review requests and
+          ongoing analysis both included. Start with a free sample report —
+          no signup needed — then try the full dashboard for {plan.trialDays} days.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <TrackedCtaLink

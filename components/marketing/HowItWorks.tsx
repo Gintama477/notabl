@@ -17,8 +17,8 @@ const STEPS = [
   },
   {
     step: "3",
-    title: "Get your weekly report",
-    desc: "Notabl reads every review that comes in and sends a clear summary each week — plus a live dashboard, and a count of what your requests brought in.",
+    title: "Get alerted when it matters",
+    desc: "Notabl reads every review that comes in and emails you when one needs your attention — plus a live dashboard, and a count of what your requests brought in.",
   },
 ];
 

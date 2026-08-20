@@ -13,7 +13,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Notabl — Get more patient reviews, and know what they say",
   description:
-    "Notabl gives your dental practice a QR code that makes it easy for patients to leave a review, then reads every review that comes in and sends a plain-language weekly report on what they add up to.",
+    "Notabl gives your dental practice a QR code that makes it easy for patients to leave a review, then reads every review that comes in and emails you a plain-language alert the moment one needs your attention.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -35,8 +35,8 @@ export function Hero() {
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-600">
               Share a QR code at the front desk, and patients can leave a
               Google review in a couple of taps. Notabl reads every review
-              that comes in and sends you a plain-language weekly report on
-              what they add up to.
+              that comes in and emails you the moment one actually needs
+              your attention — not on a schedule, only when it matters.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <TrackedCtaLink
@@ -60,7 +60,7 @@ export function Hero() {
 
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-lg shadow-slate-900/5 ring-1 ring-slate-900/5 sm:p-7">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              Example — Your Weekly Notabl Report
+              Example — Your Notabl Report
             </p>
             <p className="mt-1.5 font-serif text-lg font-semibold text-slate-900">
               Brightview Family Dental
@@ -82,7 +82,7 @@ export function Hero() {
                   Negative trends
                 </p>
                 <ul className="mt-2 list-disc space-y-1.5 pl-5 text-slate-600">
-                  <li>Complaints about appointment delays increased this week</li>
+                  <li>Complaints about appointment delays increased recently</li>
                   <li>4 reviews mentioned difficulty reaching the office by phone</li>
                 </ul>
               </div>
