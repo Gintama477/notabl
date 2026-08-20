@@ -4,20 +4,25 @@
 // already trust, not summarizing free text, which is what prevents it from
 // inventing a trend that isn't in the data.
 
+// v4: explicit rule against phrasing a cumulative total as "this period"/
+// "this week" — under the cumulative report model every count in the data
+// is a running total across the business's full review history, not a
+// narrow recent window, and the old wording read as a direct contradiction
+// next to the dashboard's genuinely narrow "New Reviews This Week" section.
 // v3: tightened the "new" trend rule so a positive theme that merely lacks
 // prior-period mentions can't be reported as an issue to investigate.
-export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v3";
+export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v4";
 
 export function buildNarrativePrompt(structuredRollupJson: string, businessName: string): string {
-  return `You are writing a weekly patient-review report for a dental practice
-called "${businessName}". You are given pre-computed, verified statistics about
-their patient reviews this period. Do NOT invent any numbers, themes, or facts
-that are not present in this data.
+  return `You are writing a patient-review report for a dental practice
+called "${businessName}". You are given pre-computed, verified statistics
+about their patient reviews to date. Do NOT invent any numbers, themes, or
+facts that are not present in this data.
 
 DATA (already computed and verified — treat as ground truth):
 ${structuredRollupJson}
 
-Write a short weekly report using ONLY the categories, counts, and trend
+Write a short report using ONLY the categories, counts, and trend
 directions present in the data above. Do not reference any theme category not
 listed in the data. Do not state a specific review quote unless it is included
 verbatim in the data's excerpts.
@@ -28,8 +33,27 @@ never suggest changes to clinical/medical treatment decisions, only
 operational/service observations (e.g. front-desk process, scheduling,
 communication).
 
+CRITICAL — every count in the data is a CUMULATIVE TOTAL across the
+business's entire review history to date, recalculated fresh each time, NOT
+a narrow recent window. Never phrase a raw count as "this period," "this
+week," or similar — that phrasing describes a short, recent slice of time,
+which these numbers are not, and this report sits right next to a genuinely
+narrow "new reviews since your last report" section on the dashboard, so
+the wrong phrasing reads as a direct contradiction between the two ("86
+this period" next to "0 new this week" looks broken even though neither
+number is wrong). Use "overall," "in total," or "to date" for a raw
+cumulative count. Reserve time-bounded language — "since your last
+report," "recently" — strictly for describing an actual before/after
+change between the current data and the prior snapshot ("priorMentionCount"
+etc.), never for a raw total.
+
+BAD example (phrases a cumulative total as if it were recent): "Professionalism
+continues to receive positive mentions (86 this period)."
+GOOD example (same number, correctly framed as a total): "Professionalism has
+86 positive mentions overall, and remains a consistent strength."
+
 A theme's "trendDirection" being "new" means it had zero mentions in the
-prior period — it says NOTHING about whether the theme is positive or
+prior snapshot — it says NOTHING about whether the theme is positive or
 negative. Never treat a "new" theme as an issue, and never place it in
 "emergingIssues" or reference it in "recommendedActions", unless its
 negativeCount is greater than 0 AND negativeCount >= positiveCount for that
@@ -40,17 +64,18 @@ never in "emergingIssues".
 
 "recommendedActions" is the most important section — every entry must be
 specific and tied directly to the numbers in the data, never generic filler.
-Each category in the data includes both this period's count and the prior
-period's count (e.g. "negativeCount" and "priorNegativeCount"). When an
-action is about a worsening or genuinely negative emerging issue (per the
-sentiment rule above), state the actual before/after counts and a concrete
-next step naming the likely operational area.
+Each category in the data includes both its current cumulative count and its
+count as of the prior snapshot (e.g. "negativeCount" and
+"priorNegativeCount"). When an action is about a worsening or genuinely
+negative emerging issue (per the sentiment rule above), state the actual
+before/after counts (phrased as "since your last report," not "this
+period") and a concrete next step naming the likely operational area.
 
 BAD example (too vague, do not write like this): "Continue providing
 excellent service."
 GOOD example (specific, tied to the data): "Phone-response complaints
-increased from 3 mentions to 8 mentions. Review front-desk call handling and
-missed-call procedures."
+increased from 3 mentions to 8 mentions since your last report. Review
+front-desk call handling and missed-call procedures."
 
 Respond with ONLY valid JSON matching this shape, no other text:
 {

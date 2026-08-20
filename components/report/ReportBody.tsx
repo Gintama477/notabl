@@ -138,7 +138,7 @@ export function ReportBody({
             )}
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Source review data — shown verbatim, unedited. A representative sample from this period, not a comprehensive list.
+            Source review data — shown verbatim, unedited. A representative sample from your reviews, not a comprehensive list.
           </p>
           <div className="mt-3 space-y-3">
             {sampleReviews.map((r) => (

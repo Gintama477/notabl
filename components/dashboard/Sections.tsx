@@ -102,8 +102,8 @@ export function IssuesGettingWorse({ rollups, excerptsByTheme }: { rollups: Roll
         <div key={r.themeCategory} className="border-l-2 border-red-600 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[r.themeCategory as ThemeCategory]}</p>
           <p className="text-sm text-slate-600">
-            Mentions {r.pctChangeVsPrior !== null ? `increased ${Math.round(r.pctChangeVsPrior)}%` : "increased"} compared with the
-            previous period ({r.negativeCount} negative mention{r.negativeCount === 1 ? "" : "s"} this period).
+            Mentions {r.pctChangeVsPrior !== null ? `increased ${Math.round(r.pctChangeVsPrior)}%` : "increased"} since your last
+            report ({r.negativeCount} negative mention{r.negativeCount === 1 ? "" : "s"} overall).
           </p>
           <QuoteList quotes={excerptsByTheme?.[r.themeCategory]} />
         </div>
@@ -125,7 +125,7 @@ export function Opportunities({ rollups, excerptsByTheme }: { rollups: Rollup[];
         <div key={r.themeCategory} className="border-l-2 border-teal-600 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[r.themeCategory as ThemeCategory]}</p>
           <p className="text-sm text-slate-600">
-            Praised in {r.positiveCount} review{r.positiveCount === 1 ? "" : "s"} this period — consider
+            Praised in {r.positiveCount} review{r.positiveCount === 1 ? "" : "s"} overall — consider
             highlighting this in your marketing or patient communications.
           </p>
           <QuoteList quotes={excerptsByTheme?.[r.themeCategory]} />

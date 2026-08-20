@@ -198,19 +198,30 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     .slice(0, 5);
   const worsening = rollup.themes.filter((t) => t.trendDirection === "increasing" && t.negativeCount > 0);
 
+  // "this period"/"this week" reads as a narrow, recent slice of time — but
+  // under the cumulative report model these counts are totals across the
+  // business's ENTIRE review history to date, computed fresh each run (see
+  // lib/analysis/runAnalysis.ts). Paired on the same dashboard with "New
+  // Reviews This Week" (genuinely narrow), "86 this period" next to "0 new
+  // this week" reads as a contradiction when it isn't one. "total"/
+  // "overall" for a raw cumulative count, "since your last report" for an
+  // actual before/after comparison — never "period," which is the
+  // ambiguous word here.
   const topPositiveThemes = positiveThemes.map((t) => ({
     category: t.category,
-    summary: `${THEME_LABELS[t.category]} continues to receive positive mentions (${t.positiveCount} this period).`,
+    summary: `${THEME_LABELS[t.category]} continues to receive positive mentions (${t.positiveCount} total).`,
   }));
 
   const topNegativeThemes = negativeThemes.map((t) => ({
     category: t.category,
-    summary: `${THEME_LABELS[t.category]} was mentioned negatively ${t.negativeCount} time${t.negativeCount === 1 ? "" : "s"} this period.`,
+    summary: `${THEME_LABELS[t.category]} has been mentioned negatively ${t.negativeCount} time${t.negativeCount === 1 ? "" : "s"} overall.`,
   }));
 
   const emergingIssues = emerging.map((t) => ({
     category: t.category,
-    summary: `${THEME_LABELS[t.category]} appeared as a new theme this period with ${t.mentionCount} mention${t.mentionCount === 1 ? "" : "s"}.`,
+    // "new" already conveys the timing correctly on its own — no need for
+    // "this period" alongside it.
+    summary: `${THEME_LABELS[t.category]} is a newly appearing theme, with ${t.mentionCount} mention${t.mentionCount === 1 ? "" : "s"} so far.`,
   }));
 
   const changesFromLastPeriod = rollup.themes
@@ -219,7 +230,7 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     .slice(0, 6)
     .map((t) => {
       const direction = (t.pctChangeVsPrior ?? 0) > 0 ? "increased" : "decreased";
-      return `${THEME_LABELS[t.category]} mentions ${direction} ${Math.abs(Math.round(t.pctChangeVsPrior ?? 0))}% compared with the previous period.`;
+      return `${THEME_LABELS[t.category]} mentions ${direction} ${Math.abs(Math.round(t.pctChangeVsPrior ?? 0))}% since your last report.`;
     });
 
   const recommendedActions = [
@@ -229,7 +240,7 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     })),
     ...emerging.slice(0, 2).map((t) => ({
       title: `Investigate new ${THEME_LABELS[t.category].toLowerCase()} feedback`,
-      detail: `This is a newly emerging theme this period (${t.mentionCount} mention${t.mentionCount === 1 ? "" : "s"}, 0 in the prior period) — worth a quick look before it becomes a pattern.`,
+      detail: `This is a newly appearing theme (${t.mentionCount} mention${t.mentionCount === 1 ? "" : "s"}, none before your last report) — worth a look.`,
     })),
   ].slice(0, 5);
 
@@ -237,19 +248,19 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
   const topPositive = positiveThemes[0];
   const summaryParts: string[] = [];
   summaryParts.push(
-    `${businessName} received ${rollup.totalReviews} review${rollup.totalReviews === 1 ? "" : "s"} analyzed for ${rollup.periodLabel}.`
+    `This report covers ${rollup.totalReviews} review${rollup.totalReviews === 1 ? "" : "s"} for ${businessName} — ${rollup.periodLabel}.`
   );
   if (topPositive) {
-    summaryParts.push(`${THEME_LABELS[topPositive.category]} remains a consistent strength, mentioned positively ${topPositive.positiveCount} times.`);
+    summaryParts.push(`${THEME_LABELS[topPositive.category]} remains a consistent strength, mentioned positively ${topPositive.positiveCount} times overall.`);
   }
   if (topIssue) {
-    summaryParts.push(`The most notable area for attention is ${THEME_LABELS[topIssue.category].toLowerCase()}, mentioned negatively ${topIssue.negativeCount} times.`);
+    summaryParts.push(`The most notable area for attention is ${THEME_LABELS[topIssue.category].toLowerCase()}, mentioned negatively ${topIssue.negativeCount} times overall.`);
   }
   if (worsening.length > 0) {
-    summaryParts.push(`${THEME_LABELS[worsening[0].category]} shows an increasing trend and is worth monitoring closely.`);
+    summaryParts.push(`${THEME_LABELS[worsening[0].category]} shows an increasing trend since your last report and is worth monitoring closely.`);
   }
   if (emerging.length > 0) {
-    summaryParts.push(`${THEME_LABELS[emerging[0].category]} emerged as a new topic this period and did not appear in prior periods.`);
+    summaryParts.push(`${THEME_LABELS[emerging[0].category]} is a newly appearing topic that didn't show up before your last report.`);
   }
 
   return {
@@ -259,7 +270,7 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     emergingIssues,
     changesFromLastPeriod,
     recommendedActions: recommendedActions.length > 0 ? recommendedActions : [
-      { title: "Keep up current practices", detail: "No significant negative trends were detected this period. Continue current operations." },
+      { title: "Keep up current practices", detail: "No significant negative trends were detected. Continue current operations." },
     ],
   };
 }
