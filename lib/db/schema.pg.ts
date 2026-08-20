@@ -125,6 +125,18 @@ export const reviews = pgTable(
     isDemoData: boolean("is_demo_data").notNull().default(true),
     rawPayloadJson: text("raw_payload_json"),
     analyzedAt: text("analyzed_at"),
+    // "${provider.name}/${provider.promptVersion}" (see lib/ai/provider.ts)
+    // at the moment this review was last analyzed — e.g.
+    // "demo-provider/demo-v1" or "claude-sonnet/extract-v1/narrative-v3".
+    // Lets runAnalysisForBusiness (lib/analysis/runAnalysis.ts) tell "never
+    // analyzed" apart from "analyzed, but by an older/different provider or
+    // prompt version" and re-analyze the latter automatically — e.g. when
+    // ANTHROPIC_API_KEY gets set and the app switches from the keyword-
+    // matching DemoProvider to real Claude. Null on existing rows means
+    // "analyzed by something unknown, before this tracking existed," which
+    // is correctly treated as stale (every one of those was the keyword
+    // matcher) without a backfill migration.
+    analyzedWith: text("analyzed_with"),
     createdAt: createdAt(),
   },
   (t) => ({
