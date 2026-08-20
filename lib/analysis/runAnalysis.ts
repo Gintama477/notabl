@@ -23,7 +23,26 @@ export type RunAnalysisResult = {
   // Genuinely new reviews since the last report (periodStart-periodEnd) —
   // NOT the cumulative total the report's theme rollup is built from.
   reviewsInPeriod: number;
+  // Reviews still needing analysis with the CURRENT provider version after
+  // this call — either never analyzed, or stale (analyzed by an older
+  // provider/prompt version). Nonzero means the extraction loop below hit
+  // its wall-clock budget before finishing; callers (app/api/analysis/run,
+  // the connect-google routes) should call runAnalysisForBusiness again to
+  // keep making progress. See EXTRACTION_BUDGET_MS below.
+  reviewsRemaining: number;
 };
+
+// Wall-clock budget for the per-review extraction loop, not a fixed review
+// count — per-call latency to the AI provider varies (DemoProvider is
+// instant; real Claude calls run roughly a second each), so a count-based
+// cap would either waste headroom or still risk timing out depending on
+// which provider is active. 45s leaves the ~60s Vercel function budget
+// (see maxDuration on the calling routes) enough room for the rollup,
+// narrative generation, and inserts that run after this loop. When the
+// budget is hit, the run still completes normally — rollups, narrative,
+// and a "completed" status — over whatever was analyzed so far; it just
+// reports reviewsRemaining > 0 so the caller knows to run again.
+const EXTRACTION_BUDGET_MS = 45_000;
 
 export async function runAnalysisForBusiness(
   businessId: string,
@@ -67,13 +86,43 @@ export async function runAnalysisForBusiness(
     // §18) and to build this run's cumulative mention windows further down.
     const allBusinessReviews = await db.select().from(reviews).where(eq(reviews.businessId, businessId));
 
+    // The provider actively running right now, e.g. "demo-provider/demo-v1"
+    // or "claude-sonnet/extract-v1/narrative-v3" (name/promptVersion — both
+    // already exist on whatever getAIProvider() returns). Compared against
+    // each review's stored analyzedWith below.
+    const currentVersion = `${provider.name}/${provider.promptVersion}`;
+
     let newlyAnalyzed = 0;
+    let reviewsRemaining = 0;
+    let budgetExceeded = false;
+    const loopStartedAt = Date.now();
 
     for (const review of allBusinessReviews) {
-      // analyzedAt (not "does a theme_mentions row exist") is the source of
-      // truth for "already processed" — a review can legitimately produce
-      // zero theme matches and must still never be re-billed on the next run.
-      if (review.analyzedAt) continue;
+      // analyzedAt + analyzedWith (not "does a theme_mentions row exist")
+      // is the source of truth for "already processed with the current
+      // provider" — a review can legitimately produce zero theme matches
+      // and must still never be re-billed once it's current. A review
+      // analyzed by a DIFFERENT provider/prompt version (analyzedWith
+      // mismatch, including null on pre-tracking rows — always stale by
+      // construction) is treated the same as never-analyzed, so switching
+      // from DemoProvider to real Claude re-analyzes everything
+      // automatically, and a future prompt-version bump does the same.
+      const isCurrent = review.analyzedAt && review.analyzedWith === currentVersion;
+      if (isCurrent) continue;
+
+      if (budgetExceeded || Date.now() - loopStartedAt > EXTRACTION_BUDGET_MS) {
+        budgetExceeded = true;
+        reviewsRemaining++;
+        continue;
+      }
+
+      // Delete any existing mentions before inserting fresh ones. Required
+      // whenever this is a RE-analysis (the review already has
+      // review_theme_mentions rows from a prior, now-stale, provider
+      // version) — without this, every theme gets counted twice and the
+      // rollups silently double. A harmless no-op (0 rows) the first time
+      // a review is ever analyzed.
+      await db.delete(reviewThemeMentions).where(eq(reviewThemeMentions.reviewId, review.id));
 
       const extraction = await extractReviewThemes(review.reviewText, review.rating);
       newlyAnalyzed++;
@@ -92,7 +141,10 @@ export async function runAnalysisForBusiness(
         );
       }
 
-      await db.update(reviews).set({ analyzedAt: new Date().toISOString() }).where(eq(reviews.id, review.id));
+      await db
+        .update(reviews)
+        .set({ analyzedAt: new Date().toISOString(), analyzedWith: currentVersion })
+        .where(eq(reviews.id, review.id));
     }
 
     // Cumulative model: every report's theme rollup reflects the business's
@@ -172,6 +224,7 @@ export async function runAnalysisForBusiness(
             weeklyReportId: previousReport.id,
             reviewsNewlyAnalyzed: 0,
             reviewsInPeriod: newReviewsThisPeriod.length,
+            reviewsRemaining,
           };
         }
       }
@@ -223,6 +276,7 @@ export async function runAnalysisForBusiness(
       weeklyReportId: report.id,
       reviewsNewlyAnalyzed: newlyAnalyzed,
       reviewsInPeriod: newReviewsThisPeriod.length,
+      reviewsRemaining,
     };
   } catch (err) {
     await db
