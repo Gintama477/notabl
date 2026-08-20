@@ -10,16 +10,29 @@ import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { track } from "@/lib/analytics/track";
 import { checkRateLimit } from "@/lib/rateLimit";
 
+// runAnalysisForBusiness's extraction loop is wall-clock budgeted at 45s
+// (see EXTRACTION_BUDGET_MS in lib/analysis/runAnalysis.ts) specifically so
+// it finishes comfortably inside this — 60s is safe on every Vercel plan
+// and leaves headroom past the 45s budget for the rollup/narrative/inserts
+// that run after the loop. Without this, the default (10s on the Hobby
+// plan) would kill a real Claude run partway through a business with more
+// than a handful of reviews.
+export const maxDuration = 60;
+
 export async function POST() {
   const accountId = await getSessionAccountId();
   if (!accountId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  // 10 manual runs per 10 minutes per account — this endpoint re-runs the
-  // full analysis pipeline (a real per-call cost once a live Claude key is
+  // Manual runs per 10 minutes per account — this endpoint re-runs the full
+  // analysis pipeline (a real per-call cost once a live Claude key is
   // configured, per docs/CREDENTIALS-NEEDED.md), so it's keyed by the
-  // authenticated account rather than IP. Generous enough for a person
-  // clicking "Run Analysis Now" repeatedly, tight enough to stop a script.
-  const rateLimit = checkRateLimit(`analysis-run:${accountId}`, 10, 10 * 60 * 1000);
+  // authenticated account rather than IP. Raised from 10 to 20: a single
+  // pass over a large business's reviews now takes several ROUNDS (each
+  // call only makes ~45s of progress — see reviewsRemaining below), and
+  // components/dashboard/RunAnalysisButton.tsx calls this endpoint
+  // automatically once per round until it's done, so the effective call
+  // count for one full re-analysis is higher than one click used to mean.
+  const rateLimit = checkRateLimit(`analysis-run:${accountId}`, 20, 10 * 60 * 1000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Too many analysis runs. Please wait a few minutes and try again." },

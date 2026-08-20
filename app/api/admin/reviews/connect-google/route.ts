@@ -19,6 +19,11 @@ const ConnectSchema = z.object({
   placeId: z.string().min(1),
 });
 
+// This route runs a full runAnalysisForBusiness pass immediately after
+// connecting — see the maxDuration comment on app/api/analysis/run/route.ts
+// for why 60s.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const authorized = await hasValidAdminSession();
   if (!authorized) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
@@ -53,14 +58,23 @@ export async function POST(req: NextRequest) {
   try {
     const result = await connectGoogleReviewSource(business.id, business.name, parsed.data.placeId);
 
+    // One 45s-budgeted pass (see EXTRACTION_BUDGET_MS in
+    // lib/analysis/runAnalysis.ts) — a large business's first real analysis
+    // won't finish in a single call. reviewsRemaining is surfaced so
+    // ConnectGoogleReviewsForm (components/admin/PilotManagement.tsx) can
+    // keep going via /api/admin/analysis/run, which just re-analyzes
+    // without re-hitting connectGoogleReviewSource (a real Outscraper call
+    // with its own cooldown).
+    let reviewsRemaining = 0;
     try {
-      await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
+      const analysisResult = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
+      reviewsRemaining = analysisResult.reviewsRemaining;
     } catch (analysisErr) {
       console.error("Post-connect analysis failed:", analysisErr);
       // Connection itself still succeeded — surface that, don't fail the whole request.
     }
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, reviewsRemaining });
   } catch (err) {
     console.error("connectGoogleReviewSource failed:", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Connection failed." }, { status: 500 });

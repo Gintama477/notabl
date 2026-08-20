@@ -16,6 +16,11 @@ import { checkRateLimit } from "@/lib/rateLimit";
 // components/dashboard/ConnectReviewsCard.tsx for the UI that calls this.
 const ConnectSchema = z.object({ placeId: z.string().min(1) });
 
+// This route runs a full runAnalysisForBusiness pass immediately after
+// connecting — see the maxDuration comment on app/api/analysis/run/route.ts
+// for why 60s.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const accountId = await getSessionAccountId();
   if (!accountId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -48,14 +53,23 @@ export async function POST(req: NextRequest) {
   try {
     const result = await connectGoogleReviewSource(business.id, business.name, parsed.data.placeId);
 
+    // One 45s-budgeted pass (see EXTRACTION_BUDGET_MS in
+    // lib/analysis/runAnalysis.ts) — a large business's first real analysis
+    // won't finish in a single call. reviewsRemaining is surfaced so the
+    // dashboard's "Run Analysis Now" button (which already loops until
+    // reviewsRemaining is 0) can finish the rest; this route itself doesn't
+    // loop, since re-running it would mean re-hitting connectGoogleReviewSource
+    // (a real Outscraper call with its own cooldown), not just re-analyzing.
+    let reviewsRemaining = 0;
     try {
-      await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
+      const analysisResult = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
+      reviewsRemaining = analysisResult.reviewsRemaining;
     } catch (analysisErr) {
       console.error("Post-connect analysis failed:", analysisErr);
       // Connection itself still succeeded — surface that, don't fail the whole request.
     }
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, ...result, reviewsRemaining });
   } catch (err) {
     if (err instanceof BusinessAlreadyClaimedError) {
       // Expected, not a server error — the UI (ConnectReviewsCard) checks
