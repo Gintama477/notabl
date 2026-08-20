@@ -114,12 +114,13 @@ export default async function DashboardPage() {
   let reviewRequestsCardProps: ComponentProps<typeof ReviewRequestsCard> = { state: "onboarding" };
   if (showReviewRequestsCard && business.slug && (await hasReviewRequestPageView(business.id))) {
     const reviewRequestsWindowDays = 30;
-    const qrSvg = await generateReviewRequestQrSvg(`${getSiteUrl()}/r/${business.slug}`, 88);
+    const shortLink = `${getSiteUrl()}/r/${business.slug}`;
+    const qrSvg = await generateReviewRequestQrSvg(shortLink, 112);
     const statsWindowEnd = new Date();
     const statsWindowStart = new Date(statsWindowEnd);
     statsWindowStart.setUTCDate(statsWindowStart.getUTCDate() - reviewRequestsWindowDays);
     const stats = await getReviewRequestStats(business.id, statsWindowStart.toISOString(), statsWindowEnd.toISOString());
-    reviewRequestsCardProps = { state: "active", qrSvg, stats, windowDays: reviewRequestsWindowDays };
+    reviewRequestsCardProps = { state: "active", qrSvg, shortLink, stats, windowDays: reviewRequestsWindowDays };
   }
 
   return (
