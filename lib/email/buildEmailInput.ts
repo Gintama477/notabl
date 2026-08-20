@@ -1,5 +1,6 @@
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
 import { WeeklyReportEmailInput } from "./templates/weeklyReportEmail";
+import { formatReportPeriod } from "@/lib/reports/formatPeriodLabel";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
 type ReportRow = {
@@ -23,7 +24,12 @@ export function buildEmailInputFromReport(
     (r) => (r.trendDirection === "increasing" || r.trendDirection === "new") && r.negativeCount > 0
   ).length;
 
-  const periodLabel = `${new Date(report.periodStart).toLocaleDateString()} – ${new Date(report.periodEnd).toLocaleDateString()}`;
+  // Same shared helper the dashboard and Full Report already use — computing
+  // this independently used to print a huge raw date range for any report
+  // whose periodStart predates the cumulative-report redesign, instead of
+  // the "covering your full review history" framing formatReportPeriod
+  // switches to for a wide span.
+  const periodLabel = formatReportPeriod(report.periodStart, report.periodEnd);
 
   return {
     businessName,

@@ -47,6 +47,12 @@ export function buildOutreachEmailSubject(practiceName: string): string {
 //   - The private-feedback path is never framed as heading off bad reviews.
 //     That framing is review gating, which Google prohibits; it's simply
 //     left out here to keep the email short.
+//   - Describes reports + alerts accurately: reviews become a report the
+//     owner can check anytime, and an email arrives only when something
+//     actually needs a look (lib/alerts/reviewAlerts.ts) — never a
+//     scheduled weekly email, which the product stopped sending. Reply
+//     drafting (components/dashboard/DraftReplyButton.tsx) gets one short
+//     line as a bonus, not the lead — the pairing above is still the pitch.
 export function buildOutreachDraftBody(opts: {
   practiceName: string;
   sampleReportUrl: string;
@@ -57,9 +63,9 @@ export function buildOutreachDraftBody(opts: {
     "",
     "Most dental practices I talk to are in one of two spots with reviews: either they're not really asking for them, or they're coming in steadily and nobody has time to read through what they actually say.",
     "",
-    "I built a small tool called Notabl that covers both. You get a QR code for the front desk that lets a patient leave a Google review in a couple of taps, and every review that comes in gets turned into a plain-language weekly summary — what's going well, what's coming up more often, and what's new.",
+    "I built a small tool called Notabl that covers both. You get a QR code for the front desk that lets a patient leave a Google review in a couple of taps, and every review that comes in gets turned into a plain-language report you can check anytime — what's going well, what's coming up more often, and what's new. You only get an email from us when something actually needs a look, like a low-rated review — not a weekly report nobody reads. It'll also draft a reply for you when you want one.",
     "",
-    "It's $49/month, no contract and no sales call — less than most tools in this space charge for just one of those two things.",
+    "It's $49/month, no contract and no sales call — less than most tools in this space charge for just one of those pieces.",
     "",
     `Worth a 10-minute look? Here's a sample report so you can see the format before we talk: ${opts.sampleReportUrl}`,
     "",

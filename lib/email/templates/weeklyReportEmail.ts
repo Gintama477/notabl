@@ -40,7 +40,7 @@ export function buildWeeklyReportEmailHtml(input: WeeklyReportEmailInput): strin
             <tr>
               <td style="padding:28px;font-family:Arial,sans-serif;color:#1c2530;">
                 <h1 style="font-size:20px;margin:0 0 4px 0;">${escapeHtml(input.businessName)}</h1>
-                <p style="font-size:13px;color:#64748b;margin:0 0 20px 0;">Weekly report for ${escapeHtml(input.periodLabel)}</p>
+                <p style="font-size:13px;color:#64748b;margin:0 0 20px 0;">${escapeHtml(input.periodLabel)}</p>
 
                 ${
                   input.topComplaintLabel
@@ -79,7 +79,7 @@ export function buildWeeklyReportEmailHtml(input: WeeklyReportEmailInput): strin
 
 export function buildWeeklyReportEmailText(input: WeeklyReportEmailInput): string {
   const lines = [
-    `${input.businessName} — Weekly report for ${input.periodLabel}`,
+    `${input.businessName} — ${input.periodLabel}`,
     "",
   ];
   if (input.topComplaintLabel) {

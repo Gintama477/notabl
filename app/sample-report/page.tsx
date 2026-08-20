@@ -8,7 +8,7 @@ import { SampleReportView } from "@/components/marketing/SampleReportView";
 
 export const metadata = {
   title: "Sample Report — Notabl",
-  description: "See exactly what a Notabl weekly report looks like, using demo review data for a sample dental practice.",
+  description: "See exactly what a Notabl report looks like, using demo review data for a sample dental practice.",
 };
 
 // Force dynamic rendering rather than static prerendering: this page reads

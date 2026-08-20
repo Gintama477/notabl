@@ -1,7 +1,8 @@
 // Sent once, right after signup completes — orients a brand-new account to
 // what just happened (their dashboard is populated with demo data) and what
-// to expect next (the weekly report email). Mirrors weeklyReportEmail.ts's
-// visual style.
+// to expect next (a triggered alert only when something needs attention,
+// not a scheduled email — see lib/alerts/reviewAlerts.ts). Mirrors
+// reviewAlertEmail.ts's visual style.
 
 export type WelcomeEmailInput = {
   businessName: string;
@@ -45,8 +46,9 @@ export function buildWelcomeEmailHtml(input: WelcomeEmailInput): string {
                   </tr>
                 </table>
                 <p style="margin:20px 0 0;color:#64748b;font-family:Arial,sans-serif;font-size:12px;line-height:1.5;">
-                  You'll get a weekly report email like this one summarizing what's new. Questions?
-                  Just reply to this email.
+                  We'll email you when something actually needs your attention — a review that needs a look,
+                  a few new reviews at once, or a shift in your rating. No news is good news; check your
+                  dashboard anytime. Questions? Just reply to this email.
                 </p>
               </td>
             </tr>
@@ -59,5 +61,5 @@ export function buildWelcomeEmailHtml(input: WelcomeEmailInput): string {
 }
 
 export function buildWelcomeEmailText(input: WelcomeEmailInput): string {
-  return `Welcome — ${input.businessName}'s Notabl dashboard is ready.\n\nWe've populated it with demo review data so you can see exactly how Notabl works before connecting your real reviews.\n\nView your dashboard: ${input.dashboardUrl}\n\nYou'll get a weekly report email like this one summarizing what's new. Questions? Just reply to this email.`;
+  return `Welcome — ${input.businessName}'s Notabl dashboard is ready.\n\nWe've populated it with demo review data so you can see exactly how Notabl works before connecting your real reviews.\n\nView your dashboard: ${input.dashboardUrl}\n\nWe'll email you when something actually needs your attention — a review that needs a look, a few new reviews at once, or a shift in your rating. No news is good news; check your dashboard anytime. Questions? Just reply to this email.`;
 }

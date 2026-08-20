@@ -15,7 +15,10 @@ export default function PrivacyPage() {
             We collect the minimum information necessary to operate Notabl: your account email, your
             practice&apos;s business information (name, website, location), the public review profile links you
             provide, and the public review content associated with those profiles (or, in this prototype,
-            demo review data — see the demo-data banner shown throughout the app).
+            demo review data — see the demo-data banner shown throughout the app). If your practice uses a
+            Notabl review-request link or QR code, we collect anonymized scan and click counts, and any
+            private feedback text a patient chooses to submit — never a patient&apos;s name, email, or phone
+            number.
           </p>
 
           <h2>2. What We Do Not Collect</h2>
