@@ -37,7 +37,7 @@ export default async function PrintReviewRequestPage() {
     <div className="min-h-screen bg-slate-100 p-8 print:bg-white print:p-0">
       <div className="mb-6 flex items-center justify-between print:hidden">
         <Link href="/dashboard/review-requests" className="text-sm font-medium text-slate-500 hover:text-slate-800">
-          ← Back to Review Requests
+          ← Back to Get More Reviews
         </Link>
         <PrintButton />
       </div>

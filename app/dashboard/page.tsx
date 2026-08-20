@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ComponentProps } from "react";
 import { redirect } from "next/navigation";
 import { getSessionAccountId } from "@/lib/auth/session";
 import {
@@ -9,13 +10,14 @@ import {
   getThemeExcerptsForRun,
   getNewReviewsForRun,
   hasReviewRequestPageView,
+  getReviewRequestStats,
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { DemoDataBanner } from "@/components/dashboard/DemoDataBanner";
 import { ConnectReviewsCard } from "@/components/dashboard/ConnectReviewsCard";
-import { ReviewRequestsPrompt } from "@/components/dashboard/ReviewRequestsPrompt";
+import { ReviewRequestsCard } from "@/components/dashboard/ReviewRequestsCard";
 import { DuplicateBusinessNotice } from "@/components/dashboard/DuplicateBusinessNotice";
 import { MetricsRow } from "@/components/dashboard/MetricsRow";
 import {
@@ -30,6 +32,8 @@ import { RunAnalysisButton } from "@/components/dashboard/RunAnalysisButton";
 import { track } from "@/lib/analytics/track";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
 import { formatReportPeriod } from "@/lib/reports/formatPeriodLabel";
+import { generateReviewRequestQrSvg } from "@/lib/reviews/reviewRequestQr";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 export default async function DashboardPage() {
   const accountId = await getSessionAccountId();
@@ -99,11 +103,24 @@ export default async function DashboardPage() {
     ? await getNewReviewsForRun(business.id, newReviewsWindowStart.toISOString(), newReviewsWindowEnd.toISOString())
     : [];
 
-  // An unused feature justifies nothing — only nudge a subscribed, real-
-  // data business toward Review Requests before it's ever actually been
-  // shown to a patient.
-  const showReviewRequestsPrompt =
-    !data.hasDemoData && !subscriptionInactive && !(await hasReviewRequestPageView(business.id));
+  // The "get more reviews" card is permanent for any subscribed, real-data
+  // business — it never disappears, only changes state (see
+  // components/dashboard/ReviewRequestsCard.tsx for why hiding it entirely
+  // once used was the bug this replaced). Default to the onboarding pitch;
+  // only fetch the QR thumbnail and live stats if there's actually
+  // something to show (the page has been viewed at least once, and the
+  // business has a slug to build a link from).
+  const showReviewRequestsCard = !data.hasDemoData && !subscriptionInactive;
+  let reviewRequestsCardProps: ComponentProps<typeof ReviewRequestsCard> = { state: "onboarding" };
+  if (showReviewRequestsCard && business.slug && (await hasReviewRequestPageView(business.id))) {
+    const reviewRequestsWindowDays = 30;
+    const qrSvg = await generateReviewRequestQrSvg(`${getSiteUrl()}/r/${business.slug}`, 88);
+    const statsWindowEnd = new Date();
+    const statsWindowStart = new Date(statsWindowEnd);
+    statsWindowStart.setUTCDate(statsWindowStart.getUTCDate() - reviewRequestsWindowDays);
+    const stats = await getReviewRequestStats(business.id, statsWindowStart.toISOString(), statsWindowEnd.toISOString());
+    reviewRequestsCardProps = { state: "active", qrSvg, stats, windowDays: reviewRequestsWindowDays };
+  }
 
   return (
     <>
@@ -122,12 +139,6 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          {showReviewRequestsPrompt && (
-            <div className="mb-8">
-              <ReviewRequestsPrompt />
-            </div>
-          )}
-
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Dashboard</p>
@@ -138,26 +149,34 @@ export default async function DashboardPage() {
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            {/*
+              Hierarchy, left to right: links to the two sub-pages (styled
+              consistently with each other, and with Run Analysis Now — same
+              outline-button treatment, since all three act on the
+              business's own data), then the one primary action (View Full
+              Report, solid teal), then a visual break before the
+              account-level items (Billing, Log Out), which are
+              deliberately plain text — housekeeping, not content actions.
+              Billing used to be a bordered button here, outweighing the
+              content links next to it; that's inverted now.
+            */}
+            <div className="flex flex-wrap items-center gap-2">
               {!data.hasDemoData && (
                 <>
-                  <Link href="/dashboard/reviews" className="text-sm font-medium text-slate-500 hover:text-slate-800">
+                  <Link
+                    href="/dashboard/reviews"
+                    className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  >
                     All Reviews
                   </Link>
                   <Link
                     href="/dashboard/review-requests"
-                    className="text-sm font-medium text-slate-500 hover:text-slate-800"
+                    className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                   >
-                    Review Requests
+                    Get More Reviews
                   </Link>
                 </>
               )}
-              <Link
-                href="/billing"
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-              >
-                Billing
-              </Link>
               <RunAnalysisButton />
               {data.latestReport && (
                 <Link
@@ -167,11 +186,14 @@ export default async function DashboardPage() {
                   View Full Report
                 </Link>
               )}
-              <form action="/api/logout" method="post">
-                <button className="rounded-md px-2 py-2 text-sm text-slate-500 hover:text-slate-800">
-                  Log Out
-                </button>
-              </form>
+              <div className="ml-1 flex items-center gap-4 border-l border-slate-200 pl-4">
+                <Link href="/billing" className="text-sm text-slate-500 hover:text-slate-800">
+                  Billing
+                </Link>
+                <form action="/api/logout" method="post">
+                  <button className="text-sm text-slate-500 hover:text-slate-800">Log Out</button>
+                </form>
+              </div>
             </div>
           </div>
 
@@ -197,6 +219,17 @@ export default async function DashboardPage() {
                   importantThemesCount={data.importantThemesCount}
                 />
               </div>
+
+              {/* Full-width, deliberately interrupting the analysis
+                  sections below — this is the other half of the product,
+                  and burying it under six report cards is how it got lost
+                  in the first place. Never hidden for a subscribed,
+                  real-data business (see showReviewRequestsCard above). */}
+              {showReviewRequestsCard && (
+                <div className="mt-8">
+                  <ReviewRequestsCard {...reviewRequestsCardProps} />
+                </div>
+              )}
 
               {!data.latestReport ? (
                 <div className="mt-10 rounded-lg border border-slate-200 bg-white p-8 text-center">

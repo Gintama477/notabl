@@ -208,7 +208,7 @@ export default async function ReviewRequestsPage({
         <div className="mx-auto max-w-3xl px-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Review Requests</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Get More Reviews</p>
               <h1 className="font-serif text-2xl font-semibold text-slate-900">{business.name}</h1>
             </div>
             <Link href="/dashboard" className="text-sm font-medium text-slate-500 hover:text-slate-800">
