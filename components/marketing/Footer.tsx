@@ -26,9 +26,7 @@ export function Footer() {
             <Link href="/admin" className="hover:text-slate-800">Admin</Link>
           </nav>
         </div>
-        <p className="mt-8 text-xs text-slate-400">
-          © {new Date().getFullYear()} Notabl. &ldquo;Notabl&rdquo; is a working product name and may change.
-        </p>
+        <p className="mt-8 text-xs text-slate-400">© {new Date().getFullYear()} Notabl.</p>
       </div>
     </footer>
   );
