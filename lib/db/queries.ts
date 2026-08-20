@@ -716,7 +716,25 @@ export async function getDashboardData(businessId: string) {
   const latestReport = await getLatestWeeklyReport(businessId);
   const rollups = latestRun ? await getThemeRollupsForRun(latestRun.id) : [];
 
-  const emergingIssuesCount = rollups.filter((r) => r.trendDirection === "new").length;
+  // Read from the SAME stored report the page's Recommended Actions /
+  // Newly Emerging Issues sections render, rather than recomputing live
+  // from rollups — latestRun and latestReport.analysisRunId are NOT
+  // guaranteed to be the same run. Cost-control dedup (runAnalysisForBusiness)
+  // can reuse an existing report's narrative when nothing's changed, but a
+  // fresh run still computes and stores its own rollups under its own id;
+  // under the cumulative model a later run's period window shifting forward
+  // can make a theme that was "new" in the reused report's run no longer
+  // register as "new" in the latest run's rollups. Recomputing this count
+  // from latestRun's rollups produced a real contradiction on screen ("0"
+  // in the metrics row while Recommended Actions still described two
+  // emerging themes from the older run backing the displayed report).
+  // Counting emergingIssuesJson instead ties this number to the exact text
+  // on screen by construction. That array is already sentiment-filtered at
+  // generation time (see lib/ai/demoProvider.ts's `emerging` and the
+  // matching instruction in lib/ai/prompts/generateNarrative.ts), so this
+  // also only counts genuinely negative emerging themes, consistent with
+  // the "Emerging Issues" label.
+  const emergingIssuesCount = latestReport ? (JSON.parse(latestReport.emergingIssuesJson) as unknown[]).length : 0;
   const importantThemesCount = rollups.length;
 
   // Drives whether <DemoDataBanner /> shows and whether the dashboard
