@@ -139,7 +139,15 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          {/*
+            Title and actions share a row starting at lg:, not sm: — at
+            sm/md widths the two competed for space and forced the action
+            bar to wrap early even though the actions themselves fit fine
+            on their own line; stacking them (title full-width, actions
+            full-width below) up to lg gives the action bar the whole
+            container to lay out in.
+          */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Dashboard</p>
               <h1 className="font-serif text-2xl font-semibold text-slate-900">{business.name}</h1>
@@ -154,11 +162,13 @@ export default async function DashboardPage() {
               consistently with each other, and with Run Analysis Now — same
               outline-button treatment, since all three act on the
               business's own data), then the one primary action (View Full
-              Report, solid teal), then a visual break before the
-              account-level items (Billing, Log Out), which are
-              deliberately plain text — housekeeping, not content actions.
-              Billing used to be a bordered button here, outweighing the
-              content links next to it; that's inverted now.
+              Report, solid teal), then the account-level items (Billing,
+              Log Out) — deliberately plain text, housekeeping rather than
+              content actions, but grouped into their own bordered pill
+              (not just a divider) so that IF this whole row still wraps on
+              a narrow viewport, that group reads as one deliberate cluster
+              wherever it lands rather than orphaned text stranded on its
+              own line.
             */}
             <div className="flex flex-wrap items-center gap-2">
               {!data.hasDemoData && (
@@ -186,10 +196,11 @@ export default async function DashboardPage() {
                   View Full Report
                 </Link>
               )}
-              <div className="ml-1 flex items-center gap-4 border-l border-slate-200 pl-4">
+              <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5">
                 <Link href="/billing" className="text-sm text-slate-500 hover:text-slate-800">
                   Billing
                 </Link>
+                <span aria-hidden className="h-3 w-px bg-slate-300" />
                 <form action="/api/logout" method="post">
                   <button className="text-sm text-slate-500 hover:text-slate-800">Log Out</button>
                 </form>
