@@ -37,7 +37,7 @@ export async function sendWeeklyReportEmail(opts: {
   const text = buildWeeklyReportEmailText(opts.input);
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
   const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
@@ -105,7 +105,7 @@ export async function sendWelcomeEmail(opts: {
   const text = buildWelcomeEmailText(opts.input);
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
   const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
@@ -161,7 +161,7 @@ export async function sendPilotInviteEmail(opts: {
   const text = buildPilotInviteEmailText(opts.input);
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
   const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
@@ -227,7 +227,7 @@ export async function sendOutreachEmail(opts: {
   // the product's transactional emails, where a generic address is fine).
   // Falls back to EMAIL_FROM_ADDRESS if unset so this never crashes, but
   // set OUTREACH_FROM_ADDRESS for real sends — see docs/OUTREACH-AUTOMATION.md.
-  const fromAddress = process.env.OUTREACH_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromAddress = process.env.OUTREACH_FROM_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
   // Same "real name, not a generic brand address" rule from
   // marketing/outreach-materials.md applies to the display name, not just
   // the address — deliberately a separate env var from EMAIL_FROM_NAME
@@ -237,7 +237,7 @@ export async function sendOutreachEmail(opts: {
   // EMAIL_FROM_ADDRESS, not OUTREACH_FROM_ADDRESS) — replies from a prospect
   // should land in the same real inbox as replies to product emails, not
   // get split across two addresses.
-  const replyToAddress = process.env.REPLY_TO_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const replyToAddress = process.env.REPLY_TO_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
 
   if (!apiKey) {
     console.log(`[demo email] Would send outreach "${opts.subject}" to ${opts.recipientEmail}`);
@@ -270,7 +270,7 @@ export async function sendLoginEmail(opts: {
   const text = buildLoginEmailText(input);
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
   const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
@@ -334,7 +334,7 @@ export async function sendReviewAlertEmail(opts: {
   const text = buildReviewAlertEmailText(opts.input);
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
   const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
@@ -390,7 +390,7 @@ export async function sendMonthlySummaryEmail(opts: {
   const text = buildMonthlySummaryEmailText(opts.input);
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "reports@notabl.example";
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
   const fromName = process.env.EMAIL_FROM_NAME || "Notabl";
   const replyToAddress = process.env.REPLY_TO_ADDRESS || fromAddress;
 
