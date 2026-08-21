@@ -7,7 +7,7 @@ import {
   getDashboardData,
   getSubscriptionForAccount,
   findDuplicateBusiness,
-  getThemeExcerptsForRun,
+  getThemeExcerptsForBusiness,
   getNewReviewsForRun,
   hasReviewRequestPageView,
   getReviewRequestStats,
@@ -79,10 +79,11 @@ export default async function DashboardPage() {
   const topNegativeThemes = data.latestReport ? JSON.parse(data.latestReport.topNegativeThemesJson) : [];
   const recommendedActions = data.latestReport ? JSON.parse(data.latestReport.recommendedActionsJson) : [];
 
-  // A couple of real, verbatim quotes per theme — same run the theme cards
-  // above already summarize, just surfaced at the individual-review level.
-  // Not fetched (and not shown) for demo data or when there's no run yet.
-  const excerptsByTheme = data.latestRun ? await getThemeExcerptsForRun(data.latestRun.id, 2) : {};
+  // A couple of real, verbatim quotes per theme, keyed by sentiment — the
+  // business's whole current analysis, not just its latest run (see
+  // getThemeExcerptsForBusiness's doc comment). Returns {} on its own for a
+  // business with nothing analyzed yet, so no latestRun guard is needed here.
+  const excerptsByTheme = await getThemeExcerptsForBusiness(business.id, 2);
 
   // The literal "what came in since last time" list — deliberately not the
   // AI-summarized emergingIssues theme list (that's a cumulative theme

@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
-import type { ThemeExcerpt } from "@/lib/db/queries";
+import type { ThemeExcerpt, ThemeExcerptsBySentiment } from "@/lib/db/queries";
 import { formatLastUpdated } from "@/lib/reports/formatLastUpdated";
 import { formatReviewText } from "@/lib/reviews/formatReviewText";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
 type Action = { title: string; detail: string };
-type ExcerptsByTheme = Record<string, ThemeExcerpt[]>;
+type ExcerptsByTheme = ThemeExcerptsBySentiment;
 
 type ReviewRow = {
   id: string;
@@ -109,6 +109,7 @@ export function ReportBody({
           items={topPositiveThemes}
           accent="text-teal-800"
           barColor="border-teal-600"
+          sentiment="positive"
           excerptsByTheme={excerptsByTheme}
         />
         <ThemeListSection
@@ -116,6 +117,7 @@ export function ReportBody({
           items={topNegativeThemes}
           accent="text-red-800"
           barColor="border-red-600"
+          sentiment="negative"
           excerptsByTheme={excerptsByTheme}
         />
         <ThemeListSection
@@ -123,6 +125,10 @@ export function ReportBody({
           items={emergingIssues}
           accent="text-amber-800"
           barColor="border-amber-500"
+          // Emerging issues are already sentiment-filtered to negative-only
+          // at generation time (see the emergingIssuesCount comment in
+          // lib/db/queries.ts's getDashboardData) — quotes must match that.
+          sentiment="negative"
           excerptsByTheme={excerptsByTheme}
         />
 
@@ -199,12 +205,16 @@ function ThemeListSection({
   items,
   accent,
   barColor,
+  sentiment,
   excerptsByTheme = {},
 }: {
   title: string;
   items: ThemeRef[];
   accent: string;
   barColor: string;
+  // Which excerpt bucket this section is allowed to draw from — see the
+  // IMPORTANT note on QuoteList below for why this can't be left implicit.
+  sentiment: "positive" | "negative";
   excerptsByTheme?: ExcerptsByTheme;
 }) {
   return (
@@ -218,7 +228,7 @@ function ThemeListSection({
             <div key={t.category} className={`border-l-2 ${barColor} pl-3`}>
               <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
               <p className="text-sm text-slate-600">{t.summary}</p>
-              <QuoteList quotes={excerptsByTheme[t.category]} />
+              <QuoteList quotes={excerptsByTheme[t.category]?.[sentiment]} />
             </div>
           ))}
         </div>
@@ -230,6 +240,14 @@ function ThemeListSection({
 // Real, verbatim patient quotes shown under a theme's summary — already
 // validated as exact substrings of their source review at analysis time
 // (lib/ai/validate.ts's sanitizeExtraction), so this only handles display.
+//
+// IMPORTANT: every quote passed here must already match the sentiment of
+// the section it's rendered in — this component does no sentiment
+// filtering of its own, on purpose, so that guarantee has to hold at every
+// call site (ThemeListSection's `sentiment` prop above picks the bucket).
+// A 5-star quote illustrating a complaint is how this bug happened the
+// first time; see getThemeExcerptsForBusiness in lib/db/queries.ts for
+// where the positive/negative split is enforced.
 function QuoteList({ quotes }: { quotes: ThemeExcerpt[] | undefined }) {
   if (!quotes || quotes.length === 0) return null;
   return (

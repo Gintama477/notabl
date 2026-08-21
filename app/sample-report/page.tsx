@@ -6,7 +6,7 @@ import {
   getSampleBusiness,
   getLatestWeeklyReport,
   getSampleReviewsForRun,
-  getThemeExcerptsForRun,
+  getThemeExcerptsForBusiness,
   getReviewCountForBusiness,
 } from "@/lib/db/queries";
 import { ReportBody } from "@/components/report/ReportBody";
@@ -32,8 +32,11 @@ export default async function SampleReportPage() {
   const sampleReviews = await getSampleReviewsForRun(business.id, report.periodStart, report.periodEnd);
   // Real quotes from the demo dataset, going through the same pipeline as a
   // paying customer's — no allReviewsHref, since this public page has no
-  // dashboard to link to.
-  const excerptsByTheme = await getThemeExcerptsForRun(report.analysisRunId, 3);
+  // dashboard to link to. Business-scoped (see getThemeExcerptsForBusiness):
+  // this permanent demo business's reviews are all analyzed by the
+  // demo-keyword provider, which is correctly treated as "current" for it
+  // specifically, even once real Claude is live for other, real businesses.
+  const excerptsByTheme = await getThemeExcerptsForBusiness(business.id, 3);
   const totalReviews = await getReviewCountForBusiness(business.id);
 
   return (

@@ -7,7 +7,7 @@ import {
   getSampleReviewsForRun,
   getDashboardData,
   getSubscriptionForAccount,
-  getThemeExcerptsForRun,
+  getThemeExcerptsForBusiness,
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
@@ -43,7 +43,10 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
   // A higher cap than the main dashboard's theme cards (4 vs 2) — the Full
   // Report has room to be more thorough. Only needed when we're actually
   // going to render the report below, but it's cheap enough to always fetch.
-  const excerptsByTheme = await getThemeExcerptsForRun(report.analysisRunId, 4);
+  // Business-scoped (see getThemeExcerptsForBusiness), not this one report's
+  // run — a report's analysisRunId is only ever one batch of a resumable
+  // analysis, not the business's whole current analysis.
+  const excerptsByTheme = await getThemeExcerptsForBusiness(business.id, 4);
 
   return (
     <>

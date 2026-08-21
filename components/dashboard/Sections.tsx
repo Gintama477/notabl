@@ -1,5 +1,5 @@
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
-import type { ThemeExcerpt } from "@/lib/db/queries";
+import type { ThemeExcerpt, ThemeExcerptsBySentiment } from "@/lib/db/queries";
 import { formatReviewText } from "@/lib/reviews/formatReviewText";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
@@ -12,12 +12,21 @@ type Rollup = {
   trendDirection: string;
   pctChangeVsPrior: number | null;
 };
-type ExcerptsByTheme = Record<string, ThemeExcerpt[]>;
+type ExcerptsByTheme = ThemeExcerptsBySentiment;
 
 // Real, verbatim patient quotes shown under a theme's summary. Excerpts have
 // already been validated as exact substrings of their source review at
 // analysis time (lib/ai/validate.ts), so nothing here re-checks that — this
 // only handles display: star rating, italics, and attribution.
+//
+// IMPORTANT: every quote passed here must already match the sentiment of
+// the section it's rendered in — this component does no sentiment
+// filtering of its own, on purpose, so that guarantee has to hold at every
+// call site below (excerptsByTheme?.[category].positive for a positive
+// section, .negative for a negative one, never the other bucket or an
+// unfiltered list). A 5-star quote illustrating a complaint is how this bug
+// happened the first time; see getThemeExcerptsForBusiness in
+// lib/db/queries.ts for where the positive/negative split is enforced.
 function QuoteList({ quotes }: { quotes: ThemeExcerpt[] | undefined }) {
   if (!quotes || quotes.length === 0) return null;
   return (
@@ -73,7 +82,7 @@ export function WhatPatientsLove({ items, excerptsByTheme }: { items: ThemeRef[]
         <div key={t.category} className="border-l-2 border-teal-600 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
           <p className="text-sm text-slate-600">{t.summary}</p>
-          <QuoteList quotes={excerptsByTheme?.[t.category]} />
+          <QuoteList quotes={excerptsByTheme?.[t.category]?.positive} />
         </div>
       ))}
     </SectionCard>
@@ -87,7 +96,7 @@ export function WhatPatientsDislike({ items, excerptsByTheme }: { items: ThemeRe
         <div key={t.category} className="border-l-2 border-red-600 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
           <p className="text-sm text-slate-600">{t.summary}</p>
-          <QuoteList quotes={excerptsByTheme?.[t.category]} />
+          <QuoteList quotes={excerptsByTheme?.[t.category]?.negative} />
         </div>
       ))}
     </SectionCard>
@@ -105,7 +114,7 @@ export function IssuesGettingWorse({ rollups, excerptsByTheme }: { rollups: Roll
             Mentions {r.pctChangeVsPrior !== null ? `increased ${Math.round(r.pctChangeVsPrior)}%` : "increased"} since your last
             report ({r.negativeCount} negative mention{r.negativeCount === 1 ? "" : "s"} overall).
           </p>
-          <QuoteList quotes={excerptsByTheme?.[r.themeCategory]} />
+          <QuoteList quotes={excerptsByTheme?.[r.themeCategory]?.negative} />
         </div>
       ))}
     </SectionCard>
@@ -128,7 +137,7 @@ export function Opportunities({ rollups, excerptsByTheme }: { rollups: Rollup[];
             Praised in {r.positiveCount} review{r.positiveCount === 1 ? "" : "s"} overall — consider
             highlighting this in your marketing or patient communications.
           </p>
-          <QuoteList quotes={excerptsByTheme?.[r.themeCategory]} />
+          <QuoteList quotes={excerptsByTheme?.[r.themeCategory]?.positive} />
         </div>
       ))}
     </SectionCard>

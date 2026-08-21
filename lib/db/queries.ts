@@ -22,7 +22,7 @@ import {
   patientFeedback,
   reviewReplies,
 } from "@/lib/db/schema.pg";
-import { eq, desc, and, gte, lt, lte, ne, ilike, isNotNull } from "drizzle-orm";
+import { eq, desc, and, gte, lt, lte, ne, ilike, isNotNull, isNull } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
 import { OUTSCRAPER_REVIEWS_LIMIT } from "@/lib/reviews/outscraperProvider";
 import { SignupInput } from "@/lib/validation/signup";
@@ -455,17 +455,62 @@ export type ThemeExcerpt = {
   sentiment: string;
 };
 
-// The one new query the "real patient quotes" feature reuses everywhere
-// (main dashboard theme cards, Full Report theme sections, and the public
+export type ThemeExcerptsBySentiment = Record<string, { positive: ThemeExcerpt[]; negative: ThemeExcerpt[] }>;
+
+// The one query the "real patient quotes" feature reuses everywhere (main
+// dashboard theme cards, Full Report theme sections, and the public
 // sample-report page). Every excerpt here has already passed
 // lib/ai/validate.ts's sanitizeExtraction() at analysis time, which drops
 // any excerpt that isn't a verbatim substring of the source review — so
 // nothing here needs re-verifying against review text, it's guaranteed
 // exact by the time it lands in reviewThemeMentions.
-export async function getThemeExcerptsForRun(
-  analysisRunId: string,
+//
+// Scoped to the BUSINESS, not one analysisRunId — under the
+// resumable/batched analysis model (lib/analysis/runAnalysis.ts) each run
+// only analyzes a subset of a business's reviews, so scoping to a single
+// run showed quotes from only that batch instead of the business's actual
+// analysis. And within that, only mentions whose review is analyzed at
+// THIS BUSINESS'S OWN current version are included — "current" here means
+// whatever analyzedWith its most-recently-analyzed review carries, not
+// whatever getAIProvider() returns globally right now. That distinction
+// matters: a demo business (e.g. the public sample report) whose reviews
+// were all analyzed by the older demo-keyword provider is internally
+// consistent and must keep showing its quotes even after a real Claude key
+// goes live for OTHER, real businesses — it's stale relative to nothing,
+// because nothing newer has touched it. A business partway through
+// re-analysis (some reviews on the old provider, some on the new one)
+// correctly shows quotes from only the newer, current slice.
+//
+// Bucketed by sentiment (not one flat list) so a caller can never
+// accidentally show a positive quote under a "what's wrong" section or vice
+// versa — see the QuoteList comments in components/dashboard/Sections.tsx
+// and components/report/ReportBody.tsx for why that guarantee has to live
+// here, at the data layer, rather than being a convention callers remember.
+export async function getThemeExcerptsForBusiness(
+  businessId: string,
   limitPerTheme = 2
-): Promise<Record<string, ThemeExcerpt[]>> {
+): Promise<ThemeExcerptsBySentiment> {
+  const [latestAnalyzed] = await db
+    .select({ analyzedWith: reviews.analyzedWith })
+    .from(reviews)
+    .where(and(eq(reviews.businessId, businessId), isNotNull(reviews.analyzedAt)))
+    .orderBy(desc(reviews.analyzedAt))
+    .limit(1);
+  // No analyzed reviews at all yet — nothing to show, not "version unknown."
+  if (!latestAnalyzed) return {};
+  // analyzedWith CAN legitimately be null here — every review on the oldest
+  // businesses (seeded before this column existed) is null, not a literal
+  // "demo-provider/..." string (see the analyzedWith comment in
+  // schema.pg.ts). Null is still a real, meaningful, MATCHABLE version for
+  // this business's own purposes: if its most-recently-analyzed review is
+  // null, every one of its reviews sharing that same null is exactly the
+  // "internally consistent, nothing newer has touched it" case this
+  // function exists to preserve — treating null as "no version, show
+  // nothing" here is what would have broken the sample report.
+  const currentVersionForBusiness = latestAnalyzed.analyzedWith;
+  const versionCondition =
+    currentVersionForBusiness === null ? isNull(reviews.analyzedWith) : eq(reviews.analyzedWith, currentVersionForBusiness);
+
   const rows = await db
     .select({
       themeCategory: reviewThemeMentions.themeCategory,
@@ -477,13 +522,15 @@ export async function getThemeExcerptsForRun(
     })
     .from(reviewThemeMentions)
     .innerJoin(reviews, eq(reviewThemeMentions.reviewId, reviews.id))
-    .where(and(eq(reviewThemeMentions.analysisRunId, analysisRunId), isNotNull(reviewThemeMentions.excerpt)))
+    .where(and(eq(reviews.businessId, businessId), versionCondition, isNotNull(reviewThemeMentions.excerpt)))
     .orderBy(desc(reviewThemeMentions.confidence));
 
-  const byTheme: Record<string, ThemeExcerpt[]> = {};
+  const byTheme: ThemeExcerptsBySentiment = {};
   for (const row of rows) {
     if (!row.excerpt) continue;
-    const list = byTheme[row.themeCategory] ?? (byTheme[row.themeCategory] = []);
+    if (row.sentiment !== "positive" && row.sentiment !== "negative") continue; // no neutral bucket — nothing currently renders one
+    const bucket = byTheme[row.themeCategory] ?? (byTheme[row.themeCategory] = { positive: [], negative: [] });
+    const list = row.sentiment === "positive" ? bucket.positive : bucket.negative;
     if (list.length >= limitPerTheme) continue;
     list.push({ text: row.excerpt, rating: row.rating, authorName: row.authorName, sentiment: row.sentiment });
   }

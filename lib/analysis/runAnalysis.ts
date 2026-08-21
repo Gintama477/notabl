@@ -196,13 +196,47 @@ export async function runAnalysisForBusiness(
     // including, correctly, every theme on a business's very first-ever
     // report, when priorMentions is empty because nothing existed yet one
     // period ago. No special-casing needed for that case.
-    const currentReviewIds = allBusinessReviews.filter((r) => new Date(r.reviewDate) < periodEnd).map((r) => r.id);
-    const priorReviewIds = allBusinessReviews.filter((r) => new Date(r.reviewDate) < periodStart).map((r) => r.id);
+    // ALSO restricted to analyzedWith === currentVersion — a review still
+    // carrying mentions from an older provider/prompt version (e.g. the
+    // pre-Claude keyword matcher) contributes NOTHING to the rollup, rather
+    // than being silently blended in as if it were equivalent data. That
+    // blending is exactly how a keyword matcher's false "negative" on
+    // "never a long wait" ended up counted alongside real Claude's correct
+    // sentiment for the same theme. Counts will be smaller than the
+    // business's total review count during a re-analysis migration —
+    // that's correct and honest, not a bug: see mentionsForReviews below.
+    const currentReviewIds = allBusinessReviews
+      .filter((r) => new Date(r.reviewDate) < periodEnd && r.analyzedWith === currentVersion)
+      .map((r) => r.id);
+    const priorReviewIds = allBusinessReviews
+      .filter((r) => new Date(r.reviewDate) < periodStart && r.analyzedWith === currentVersion)
+      .map((r) => r.id);
 
     const currentMentions = await mentionsForReviews(currentReviewIds);
     const priorMentions = await mentionsForReviews(priorReviewIds);
 
     const rollups = computeThemeRollups(currentMentions, priorMentions);
+
+    // Regression guard, not an active check: rollup counts are computed
+    // directly FROM currentMentions above, so in correct code this can
+    // never fire. Its only job is to catch a future change that decouples
+    // the two again (e.g. someone re-widening mentionsForReviews to pull
+    // unfiltered mentions) — turning that into a loud automation_logs
+    // warning instead of a silent contradiction between the dashboard's
+    // numbers and its quotes, which is exactly how this bug went unnoticed.
+    for (const r of rollups) {
+      const hasCurrentNegative = currentMentions.some((m) => m.category === r.category && m.sentiment === "negative");
+      const hasCurrentPositive = currentMentions.some((m) => m.category === r.category && m.sentiment === "positive");
+      if ((r.negativeCount > 0) !== hasCurrentNegative || (r.positiveCount > 0) !== hasCurrentPositive) {
+        await db.insert(automationLogs).values({
+          jobName: "run-analysis",
+          businessId,
+          status: "warning",
+          detail: `Rollup/mention mismatch for theme "${r.category}" on run ${run.id}: negativeCount=${r.negativeCount} (current mentions say ${hasCurrentNegative}), positiveCount=${r.positiveCount} (current mentions say ${hasCurrentPositive}). This should never happen — see the currentMentions-derived guard in runAnalysisForBusiness.`,
+          finishedAt: new Date().toISOString(),
+        });
+      }
+    }
 
     // The literal "what came in since last time" list — deliberately
     // separate from the cumulative rollup above, and allowed to be
@@ -354,6 +388,13 @@ export async function runAnalysisForBusiness(
   }
 }
 
+// Given a set of review ids, returns their theme mentions. Callers are
+// responsible for restricting reviewIds to reviews whose analyzedWith
+// already matches the CURRENT provider/prompt version (see
+// currentReviewIds/priorReviewIds above) — this function trusts that and
+// does not re-check it itself, so passing an unfiltered id set here would
+// silently blend stale-provider mentions back into the rollup, which is
+// the exact bug this version-filtering exists to prevent.
 async function mentionsForReviews(reviewIds: string[]): Promise<ThemeMentionRecord[]> {
   if (reviewIds.length === 0) return [];
   const rows = await db.select().from(reviewThemeMentions);
