@@ -17,6 +17,16 @@
 // next to the dashboard's genuinely narrow "New Reviews This Week" section.
 // v3: tightened the "new" trend rule so a positive theme that merely lacks
 // prior-period mentions can't be reported as an issue to investigate.
+//
+// NARRATION ONLY — this version must never be mixed into the per-review
+// extraction key (reviews.analyzedWith, see AIProvider.promptVersion in
+// lib/ai/provider.ts). It used to be, which meant a pure wording change
+// here invalidated every review's extraction and ordered a full re-analysis
+// that couldn't finish inside the per-run time budget. Bumping this should
+// cost exactly one narrative regeneration per business, nothing more:
+// weeklyReports.narrativeVersion records it per report, and the
+// cost-control reuse check in lib/analysis/runAnalysis.ts compares against
+// it so a wording change actually takes effect instead of being skipped.
 export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v5";
 
 export function buildNarrativePrompt(structuredRollupJson: string, businessName: string): string {

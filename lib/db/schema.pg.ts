@@ -252,6 +252,18 @@ export const weeklyReports = pgTable("weekly_reports", {
   changesFromLastPeriodJson: text("changes_from_last_period_json").notNull(),
   recommendedActionsJson: text("recommended_actions_json").notNull(),
   status: text("status").notNull().default("draft"),
+  // GENERATE_NARRATIVE_PROMPT_VERSION at the moment this report's text was
+  // written. The narrative sections above are STORED text, not rendered
+  // from the prompt at display time — so changing the prompt's wording
+  // rules does nothing to an existing report unless that report is
+  // regenerated. This column is what lets the cost-control reuse check in
+  // lib/analysis/runAnalysis.ts tell "identical narrative, safe to reuse"
+  // apart from "narrative written under older wording rules, must
+  // regenerate." Without it, that check reused a stale report forever,
+  // because a wording change never alters the theme COUNTS it compared.
+  // Backfilled to 'legacy' on existing rows so they never match a current
+  // version and get regenerated exactly once.
+  narrativeVersion: text("narrative_version"),
   createdAt: createdAt(),
 });
 

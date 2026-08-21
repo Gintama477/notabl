@@ -9,10 +9,11 @@
 
 import { db } from "@/lib/db/client";
 import { reviews, reviewThemeMentions, analysisRuns, themeRollups, weeklyReports, automationLogs } from "@/lib/db/schema.pg";
-import { eq } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { extractReviewThemes } from "@/lib/ai/extractReview";
 import { computeThemeRollups, ThemeMentionRecord } from "@/lib/ai/computeTrends";
 import { generateWeeklyNarrative } from "@/lib/ai/generateReportNarrative";
+import { GENERATE_NARRATIVE_PROMPT_VERSION } from "@/lib/ai/prompts/generateNarrative";
 import { getAIProvider } from "@/lib/ai/provider";
 import { getLatestWeeklyReport, getThemeRollupsForRun, getNewReviewsForRun } from "@/lib/db/queries";
 
@@ -44,6 +45,17 @@ export type RunAnalysisResult = {
 // reports reviewsRemaining > 0 so the caller knows to run again.
 const EXTRACTION_BUDGET_MS = 45_000;
 
+// A run is inserted as "running" and only updated at the very end. If the
+// serverless function is killed mid-run (hard timeout, deploy, OOM) neither
+// the success path nor the catch block gets to execute, so the row sits in
+// "running" forever — invisible, and it makes the admin panel's run history
+// lie about what's actually in flight. Any run still "running" past this
+// threshold cannot be alive: the calling routes cap at maxDuration = 60s,
+// so 10 minutes is far beyond any legitimate in-flight run. Swept at the
+// start of the next run for the same business — self-healing, no cron
+// needed. See also the matching red warning in /admin.
+const STALE_RUN_MS = 10 * 60 * 1000;
+
 export async function runAnalysisForBusiness(
   businessId: string,
   businessName: string,
@@ -56,6 +68,30 @@ export async function runAnalysisForBusiness(
 
   const startedAt = new Date().toISOString();
   const provider = getAIProvider();
+
+  // Self-heal any run for this business that was killed mid-flight and left
+  // stranded in "running" (see STALE_RUN_MS). Done before inserting this
+  // run's own row so it can never sweep itself.
+  const staleCutoff = new Date(Date.now() - STALE_RUN_MS).toISOString();
+  const stranded = await db
+    .update(analysisRuns)
+    .set({
+      status: "failed",
+      errorMessage: "Run stalled — still marked running well past any possible completion window, so it was almost certainly killed mid-run (function timeout or deploy). Marked failed automatically by the next run for this business.",
+      completedAt: new Date().toISOString(),
+    })
+    .where(and(eq(analysisRuns.businessId, businessId), eq(analysisRuns.status, "running"), lt(analysisRuns.startedAt, staleCutoff)))
+    .returning({ id: analysisRuns.id });
+
+  if (stranded.length > 0) {
+    await db.insert(automationLogs).values({
+      jobName: "run-analysis",
+      businessId,
+      status: "failed",
+      detail: `Marked ${stranded.length} stalled run(s) as failed before starting a new one: ${stranded.map((r) => r.id).join(", ")}.`,
+      finishedAt: new Date().toISOString(),
+    });
+  }
 
   const [run] = await db
     .insert(analysisRuns)
@@ -193,7 +229,8 @@ export async function runAnalysisForBusiness(
 
     // Cost control: if no reviews were newly analyzed AND the freshly
     // computed rollup is identical to the one behind the business's most
-    // recent report, nothing has actually changed since that report was
+    // recent report AND that report's text was written under the CURRENT
+    // narrative wording rules, nothing has actually changed since it was
     // generated — reuse it instead of paying for another narrative
     // generation call. This is the realistic "regenerate unnecessarily"
     // case: someone clicking "Run Analysis Now" more than once in a row, or
@@ -201,11 +238,22 @@ export async function runAnalysisForBusiness(
     // matching isn't used here on purpose (two clicks a few seconds apart
     // get slightly different "now" timestamps) — comparing the actual
     // theme counts is what genuinely proves nothing changed.
+    //
+    // THE narrativeVersion CHECK IS LOAD-BEARING. This skip exists to avoid
+    // paying for an IDENTICAL narrative, and must never suppress a
+    // narrative whose WORDING RULES have changed. Without it, three
+    // consecutive correct wording fixes appeared to do nothing in
+    // production: a wording change never alters theme counts, so this
+    // branch fired every time and handed back a report whose stored text
+    // was written weeks earlier under the old rules. Regenerating on a
+    // version mismatch costs exactly one narrative call — not a
+    // re-extraction — so the cost-control intent is fully preserved.
     if (newlyAnalyzed === 0) {
       const previousReport = await getLatestWeeklyReport(businessId);
       if (previousReport) {
         const previousRollups = await getThemeRollupsForRun(previousReport.analysisRunId);
-        if (rollupsAreEquivalent(previousRollups, rollups)) {
+        const narrativeIsCurrent = previousReport.narrativeVersion === GENERATE_NARRATIVE_PROMPT_VERSION;
+        if (narrativeIsCurrent && rollupsAreEquivalent(previousRollups, rollups)) {
           await db
             .update(analysisRuns)
             .set({ status: "completed", reviewsAnalyzedCount: 0, completedAt: new Date().toISOString() })
@@ -251,6 +299,11 @@ export async function runAnalysisForBusiness(
         emergingIssuesJson: JSON.stringify(narrative.emergingIssues),
         changesFromLastPeriodJson: JSON.stringify(narrative.changesFromLastPeriod),
         recommendedActionsJson: JSON.stringify(narrative.recommendedActions),
+        // Stamps the wording rules this text was written under, so the
+        // cost-control reuse check above can tell a still-current report
+        // apart from one that only LOOKS unchanged because its theme counts
+        // happen to match.
+        narrativeVersion: GENERATE_NARRATIVE_PROMPT_VERSION,
         status: "draft",
       })
       .returning();

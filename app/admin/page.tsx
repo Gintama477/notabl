@@ -142,6 +142,31 @@ export default async function AdminPage({
 
         <Section title="Review Analysis Status">
           <div className="p-4">
+            {data.stalledRuns.length > 0 && (
+              <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3">
+                <p className="text-sm font-semibold text-red-800">
+                  {data.stalledRuns.length} analysis run{data.stalledRuns.length === 1 ? "" : "s"} stuck in
+                  &ldquo;running&rdquo; for over 10 minutes
+                </p>
+                <p className="mt-1 text-xs text-red-700">
+                  A run is only marked completed at the very end, so one killed mid-flight (function timeout,
+                  deploy) stays &ldquo;running&rdquo; forever and makes the run history below misleading. Nothing is
+                  actually in flight — the calling routes cap at 60 seconds. Running analysis again for the
+                  affected business clears these automatically.
+                </p>
+                <ul className="mt-2 space-y-0.5 text-xs text-red-700">
+                  {data.stalledRuns.map((r) => {
+                    const business = data.businesses.find((b) => b.id === r.businessId);
+                    return (
+                      <li key={r.id}>
+                        {business?.name ?? r.businessId} — started{" "}
+                        {r.startedAt ? new Date(r.startedAt).toLocaleString() : "unknown"}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
             <p className="mb-3 text-sm text-slate-600">
               Current provider version: <code className="rounded bg-slate-100 px-1.5 py-0.5">{data.currentAnalysisVersion}</code>.
               Per business, how many real reviews are analyzed with THIS version versus stale (analyzed by an older

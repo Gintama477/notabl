@@ -7,12 +7,27 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ReviewExtraction, ReviewExtractionSchema, WeeklyNarrative, WeeklyNarrativeSchema, DraftReplySchema } from "./validate";
 import { buildExtractReviewPrompt, EXTRACT_REVIEW_PROMPT_VERSION } from "./prompts/extractReview";
-import { buildNarrativePrompt, GENERATE_NARRATIVE_PROMPT_VERSION } from "./prompts/generateNarrative";
+import { buildNarrativePrompt } from "./prompts/generateNarrative";
 import { buildDraftReplyPrompt } from "./prompts/draftReply";
 import { demoAnalyzeReview, demoGenerateNarrative, demoDraftReply } from "./demoProvider";
 
 export interface AIProvider {
   name: string;
+  // EXTRACTION version ONLY — this is what gets stored per review as
+  // reviews.analyzedWith, and runAnalysis.ts re-extracts every review whose
+  // stored value doesn't match. It must therefore reflect ONLY what
+  // actually determines a review's extracted themes.
+  //
+  // This used to be `${EXTRACT}/${NARRATIVE}`, which meant a change to how
+  // the summary PARAGRAPHS are worded invalidated all 200 reviews'
+  // extractions and ordered a full, expensive re-analysis of the entire
+  // history — ~200 seconds of API calls against a 45s per-run budget, so
+  // it never finished (production got 12 reviews in and stalled there for
+  // days). Extraction and narration are independent: changing one must
+  // never invalidate the other. See GENERATE_NARRATIVE_PROMPT_VERSION's
+  // own comment in lib/ai/prompts/generateNarrative.ts, and the
+  // narrativeVersion column on weeklyReports which is what tracks the
+  // narrative side instead.
   promptVersion: string;
   analyzeReview(reviewText: string, rating: number): Promise<ReviewExtraction>;
   generateNarrative(structuredRollupJson: string, businessName: string): Promise<WeeklyNarrative>;
@@ -21,7 +36,7 @@ export interface AIProvider {
 
 class ClaudeProvider implements AIProvider {
   name = "claude-sonnet";
-  promptVersion = `${EXTRACT_REVIEW_PROMPT_VERSION}/${GENERATE_NARRATIVE_PROMPT_VERSION}`;
+  promptVersion = EXTRACT_REVIEW_PROMPT_VERSION;
   private client: Anthropic;
 
   constructor(apiKey: string) {

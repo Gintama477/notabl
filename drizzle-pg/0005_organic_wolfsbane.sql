@@ -1,0 +1,1 @@
+ALTER TABLE "weekly_reports" ADD COLUMN "narrative_version" text;

@@ -36,6 +36,13 @@
       "when": 1787194764461,
       "tag": "0004_smart_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787271612302,
+      "tag": "0005_organic_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

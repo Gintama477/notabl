@@ -652,6 +652,20 @@ export async function getAdminOverview() {
   const allFeedback = await db.select().from(feedback).orderBy(desc(feedback.createdAt));
   const allSupportAppeals = await db.select().from(supportAppeals).orderBy(desc(supportAppeals.createdAt));
 
+  // Runs stranded in "running" — a run is only ever updated at the very end,
+  // so one killed mid-flight (function timeout, deploy) sits in "running"
+  // forever and makes this panel's run history lie about what's in flight.
+  // runAnalysisForBusiness self-heals these on the next run for the SAME
+  // business (see STALE_RUN_MS there); this surfaces any that are still
+  // stranded because that business hasn't been re-run since — an invisible
+  // failure made visible, same principle as the Stripe webhook check.
+  const staleRunCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const stalledRuns = await db
+    .select({ id: analysisRuns.id, businessId: analysisRuns.businessId, startedAt: analysisRuns.startedAt })
+    .from(analysisRuns)
+    .where(and(eq(analysisRuns.status, "running"), lt(analysisRuns.startedAt, staleRunCutoff)))
+    .orderBy(desc(analysisRuns.startedAt));
+
   const planPrice = PLANS[DEFAULT_PLAN].priceMonthlyUsd;
   const activeOrTrialing = allSubscriptions.filter((s) => s.status === "active" || s.status === "trialing");
   const activePaid = allSubscriptions.filter((s) => s.status === "active");
@@ -716,6 +730,7 @@ export async function getAdminOverview() {
     supportAppeals: allSupportAppeals,
     currentAnalysisVersion,
     reviewAnalysisStatus,
+    stalledRuns,
   };
 }
 
