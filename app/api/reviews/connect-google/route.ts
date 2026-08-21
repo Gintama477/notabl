@@ -55,21 +55,26 @@ export async function POST(req: NextRequest) {
 
     // One 45s-budgeted pass (see EXTRACTION_BUDGET_MS in
     // lib/analysis/runAnalysis.ts) — a large business's first real analysis
-    // won't finish in a single call. reviewsRemaining is surfaced so the
-    // dashboard's "Run Analysis Now" button (which already loops until
-    // reviewsRemaining is 0) can finish the rest; this route itself doesn't
-    // loop, since re-running it would mean re-hitting connectGoogleReviewSource
-    // (a real Outscraper call with its own cooldown), not just re-analyzing.
+    // won't finish in a single call. reviewsRemaining and
+    // reviewsNewlyAnalyzed are both surfaced so the caller
+    // (components/dashboard/ConnectReviewsCard.tsx) can keep calling
+    // /api/analysis/run itself to finish the rest, showing one continuous
+    // progress state rather than leaving a customer to notice and click a
+    // separate button. This route itself doesn't loop, since re-running it
+    // would mean re-hitting connectGoogleReviewSource (a real Outscraper
+    // call with its own cooldown), not just re-analyzing.
     let reviewsRemaining = 0;
+    let reviewsNewlyAnalyzed = 0;
     try {
       const analysisResult = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
       reviewsRemaining = analysisResult.reviewsRemaining;
+      reviewsNewlyAnalyzed = analysisResult.reviewsNewlyAnalyzed;
     } catch (analysisErr) {
       console.error("Post-connect analysis failed:", analysisErr);
       // Connection itself still succeeded — surface that, don't fail the whole request.
     }
 
-    return NextResponse.json({ ok: true, ...result, reviewsRemaining });
+    return NextResponse.json({ ok: true, ...result, reviewsRemaining, reviewsNewlyAnalyzed });
   } catch (err) {
     if (err instanceof BusinessAlreadyClaimedError) {
       // Expected, not a server error — the UI (ConnectReviewsCard) checks
