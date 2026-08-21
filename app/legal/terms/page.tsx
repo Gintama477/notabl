@@ -10,7 +10,7 @@ export default function TermsPage() {
       <Header />
       <main className="flex-1">
         <LegalPageShell title="Terms of Service">
-          <p>Last updated: placeholder — set this when finalized.</p>
+          <p>Last updated: August 21, 2026</p>
 
           <h2>1. What Notabl Is</h2>
           <p>
@@ -60,7 +60,16 @@ export default function TermsPage() {
 
           <h2>7. Limitation of Liability</h2>
           <p>
-            [Placeholder — standard limitation of liability language to be drafted by counsel.]
+            The service is provided &ldquo;as is&rdquo; and &ldquo;as available,&rdquo; without warranties of any
+            kind, whether express or implied, including implied warranties of merchantability, fitness for a
+            particular purpose, or non-infringement. To the fullest extent permitted by law, Notabl and its
+            operators will not be liable for any indirect, incidental, special, consequential, or punitive
+            damages, or any loss of profits, revenue, data, or goodwill, arising from your use of or inability
+            to use the service, even if advised of the possibility of such damages. Notabl&apos;s total liability
+            for any claim arising out of or relating to these Terms or the service will not exceed the amount
+            you paid to Notabl in the twelve (12) months preceding the claim. Some jurisdictions do not allow
+            the exclusion or limitation of certain damages or warranties, so some of the limitations above may
+            not apply to you.
           </p>
 
           <h2>8. Changes to These Terms</h2>
@@ -70,7 +79,7 @@ export default function TermsPage() {
           </p>
 
           <h2>9. Contact</h2>
-          <p>[Placeholder — support/contact email to be added.]</p>
+          <p>Questions about these Terms? Contact us at <a href="mailto:support@trynotabl.com">support@trynotabl.com</a>.</p>
         </LegalPageShell>
       </main>
       <Footer />
