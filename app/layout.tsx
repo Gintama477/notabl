@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getSiteUrl } from "@/lib/siteUrl";
 import "./globals.css";
 
 // Deliberately using system font stacks (defined in globals.css) instead of
@@ -10,10 +11,31 @@ import "./globals.css";
 // in next/font/local or next/font/google once deploying somewhere with
 // unrestricted network access, if desired.
 
+const title = "Notabl — Get more patient reviews, and know what they say";
+const description =
+  "Notabl gives your dental practice a QR code that makes it easy for patients to leave a review, then reads every review that comes in and emails you a plain-language alert the moment one needs your attention.";
+
 export const metadata: Metadata = {
-  title: "Notabl — Get more patient reviews, and know what they say",
-  description:
-    "Notabl gives your dental practice a QR code that makes it easy for patients to leave a review, then reads every review that comes in and emails you a plain-language alert the moment one needs your attention.",
+  // Required for opengraph-image.tsx's relative output, and for the
+  // og:url/canonical below, to resolve to the real domain instead of
+  // whatever origin a preview deployment happened to be built from.
+  metadataBase: new URL(getSiteUrl()),
+  title,
+  description,
+  openGraph: {
+    title,
+    description,
+    url: "/",
+    siteName: "Notabl",
+    type: "website",
+    // Image itself comes from app/opengraph-image.tsx — Next.js wires it
+    // up automatically, no need to list it here.
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
