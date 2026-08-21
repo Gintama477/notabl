@@ -1,0 +1,1 @@
+ALTER TABLE "review_sources" ADD COLUMN "possibly_truncated" boolean DEFAULT false NOT NULL;

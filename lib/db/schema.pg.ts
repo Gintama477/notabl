@@ -101,6 +101,16 @@ export const reviewSources = pgTable("review_sources", {
   status: text("status").notNull().default("active"),
   connectedAt: createdAt(),
   lastSyncedAt: text("last_synced_at"),
+  // True when the most recent sync returned exactly the provider's
+  // per-request review cap (see OUTSCRAPER_REVIEWS_LIMIT in
+  // lib/reviews/outscraperProvider.ts) — meaning there are probably more
+  // reviews on the actual listing than we imported. Set on every sync
+  // (connectGoogleReviewSource, lib/db/queries.ts), not just the first, so
+  // it stays accurate if the practice's review count grows past the cap
+  // later. Read by the dashboard (getDashboardData) to show "Analyzing
+  // your most recent N reviews" instead of ever letting a truncated import
+  // present itself as complete.
+  possiblyTruncated: boolean("possibly_truncated").notNull().default(false),
 });
 
 // ---------------------------------------------------------------------------

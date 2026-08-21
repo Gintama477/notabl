@@ -39,6 +39,7 @@ export function ReportBody({
   report,
   sampleReviews,
   totalReviews,
+  possiblyTruncated = false,
   excerptsByTheme = {},
   allReviewsHref,
 }: {
@@ -49,6 +50,13 @@ export function ReportBody({
   // the cumulative model ("covers all N reviews" is literally true); a
   // date range in its place was neither.
   totalReviews: number;
+  // True when the connected Google source hit its import cap (see
+  // OUTSCRAPER_REVIEWS_LIMIT, lib/reviews/outscraperProvider.ts) and the
+  // practice likely has more reviews than totalReviews reflects. Never let
+  // a truncated import present itself as complete — see the banner below.
+  // Optional/defaulted so the public /sample-report page (which has no
+  // real Google source to check) doesn't need to pass it.
+  possiblyTruncated?: boolean;
   // Real, verbatim quotes per theme category. Optional and defaulted to {}
   // so this component keeps working unchanged for callers that don't pass
   // it (there are none left as of this change, but it keeps the type
@@ -74,9 +82,17 @@ export function ReportBody({
         <p className="text-xs font-medium uppercase tracking-wide text-teal-700">Notabl Review Report</p>
         <h1 className="mt-1 font-serif text-3xl font-semibold text-slate-900">{businessName}</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Last updated {formatLastUpdated(report.createdAt)} · Covers all {totalReviews} review
+          Last updated {formatLastUpdated(report.createdAt)} ·{" "}
+          {possiblyTruncated ? "Covers your most recent" : "Covers all"} {totalReviews} review
           {totalReviews === 1 ? "" : "s"}
         </p>
+        {possiblyTruncated && (
+          <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Your practice may have more reviews on Google than we imported — this report reflects the most recent
+            {" "}
+            {totalReviews}.
+          </p>
+        )}
       </header>
 
       <div className="space-y-10 px-8 py-8">

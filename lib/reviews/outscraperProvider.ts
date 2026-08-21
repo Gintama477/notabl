@@ -24,6 +24,26 @@ import type { ReviewDataProvider, ReviewRecord } from "@/lib/reviews/provider";
 
 const OUTSCRAPER_ENDPOINT = "https://api.outscraper.cloud/maps/reviews-v3";
 
+// Cap on how many reviews we import per connect/sync. Raised from 200 to
+// 500 — several practices in the outreach queue have 280-400 real reviews,
+// so 200 silently truncated a real signup's history with nothing telling
+// them that happened. 500 covers a normal practice at negligible cost:
+// Outscraper's published pricing (outscraper.com/google-maps-reviews-scraper,
+// as of this writing) is per-review, not per-request — the first 500
+// reviews per month are free, and beyond that it's $0.003/review — so this
+// change does not meaningfully affect spend. No documented hard per-request
+// ceiling was found in Outscraper's public docs (their interactive API
+// reference isn't reachable for an automated check); if a real 500-review
+// import throws or silently truncates further, that's the actual vendor
+// ceiling and this constant needs lowering, not removing.
+//
+// Exported so connectGoogleReviewSource (lib/db/queries.ts) can detect
+// truncation: a response with exactly this many reviews means there are
+// probably more on the actual listing than we imported, which gets
+// recorded on the review source and shown plainly on the dashboard — never
+// let a truncated import present itself as complete.
+export const OUTSCRAPER_REVIEWS_LIMIT = 500;
+
 // Field names below are based on Outscraper's published examples as of
 // this writing, not a live-verified response — Outscraper does not
 // guarantee a stable schema. If real calls start failing or returning
@@ -92,9 +112,22 @@ export class OutscraperReviewProvider implements ReviewDataProvider {
 
     const url = new URL(OUTSCRAPER_ENDPOINT);
     url.searchParams.set("query", placeId);
-    url.searchParams.set("reviewsLimit", "200");
+    url.searchParams.set("reviewsLimit", String(OUTSCRAPER_REVIEWS_LIMIT));
     url.searchParams.set("language", "en");
     url.searchParams.set("async", "false");
+    // Best-effort request for newest-first SELECTION when the limit above
+    // truncates — NOT relied on alone. This param name/value is unverified
+    // against live Outscraper docs (their interactive API reference isn't
+    // reachable for an automated check from here); if Outscraper ignores an
+    // unrecognized query param it's a harmless no-op. What actually
+    // guarantees "most recent" below is the explicit sort of whatever comes
+    // back, by reviewDate, in code — see the sort call further down. That
+    // fixes the ORDER of what we received; it can't fix a wrong SELECTION
+    // if the API silently returned an arbitrary (not newest) 500 out of a
+    // larger total. Confirm this against a real multi-hundred-review
+    // business before relying on it operationally (compare the newest
+    // imported review's date against the practice's actual Google listing).
+    url.searchParams.set("sort", "newest");
 
     const res = await fetch(url.toString(), {
       headers: { "X-API-KEY": apiKey },
@@ -114,12 +147,21 @@ export class OutscraperReviewProvider implements ReviewDataProvider {
       );
     }
 
-    return rawReviews.map((r) => ({
+    const mapped = rawReviews.map((r) => ({
       externalReviewId: stableExternalId(r),
       authorName: r.author_title ?? null,
       rating: r.review_rating ?? 0,
       reviewText: r.review_text ?? "",
       reviewDate: toIsoDate(r),
     }));
+
+    // Explicit newest-first sort, independent of whatever order Outscraper
+    // actually returned — never assume an upstream sort held, even with
+    // sort=newest requested above. This guarantees correct ORDER for
+    // whatever set we got; see the request-param comment above for the
+    // separate SELECTION caveat this does not cover.
+    mapped.sort((a, b) => new Date(b.reviewDate).getTime() - new Date(a.reviewDate).getTime());
+
+    return mapped;
   }
 }

@@ -33,6 +33,7 @@ import { track } from "@/lib/analytics/track";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
 import { formatLastUpdated } from "@/lib/reports/formatLastUpdated";
 import { generateReviewRequestQrSvg } from "@/lib/reviews/reviewRequestQr";
+import { OUTSCRAPER_REVIEWS_LIMIT } from "@/lib/reviews/outscraperProvider";
 import { getSiteUrl } from "@/lib/siteUrl";
 
 export default async function DashboardPage() {
@@ -226,9 +227,17 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <>
-              <div className="mt-8">
+              {data.possiblyTruncated && (
+                <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                  Analyzing your most recent {OUTSCRAPER_REVIEWS_LIMIT} reviews — your practice may have more on
+                  Google than we imported.
+                </div>
+              )}
+
+              <div className={data.possiblyTruncated ? "mt-4" : "mt-8"}>
                 <MetricsRow
                   totalReviews={data.totalReviews}
+                  reviewsAnalyzedCount={data.reviewsAnalyzedCount}
                   avgRating={data.avgRating}
                   positivePct={data.positivePct}
                   negativePct={data.negativePct}

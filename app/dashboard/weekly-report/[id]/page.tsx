@@ -29,7 +29,7 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
   if (!report || report.businessId !== business.id) notFound();
 
   const sampleReviews = await getSampleReviewsForRun(business.id, report.periodStart, report.periodEnd);
-  const { hasDemoData, totalReviews } = await getDashboardData(business.id);
+  const { hasDemoData, totalReviews, possiblyTruncated } = await getDashboardData(business.id);
   const subscription = await getSubscriptionForAccount(accountId);
   const isActiveOrTrialing = subscription?.status === "active" || subscription?.status === "trialing";
   // See the matching comment in app/dashboard/page.tsx.
@@ -71,6 +71,7 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
               report={report}
               sampleReviews={sampleReviews}
               totalReviews={totalReviews}
+              possiblyTruncated={possiblyTruncated}
               excerptsByTheme={excerptsByTheme}
               allReviewsHref="/dashboard/reviews"
             />

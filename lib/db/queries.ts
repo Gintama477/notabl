@@ -24,6 +24,7 @@ import {
 } from "@/lib/db/schema.pg";
 import { eq, desc, and, gte, lt, lte, ne, ilike, isNotNull } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
+import { OUTSCRAPER_REVIEWS_LIMIT } from "@/lib/reviews/outscraperProvider";
 import { SignupInput } from "@/lib/validation/signup";
 import { FeedbackInput } from "@/lib/validation/feedback";
 import { DEFAULT_PLAN, PLANS } from "@/config/pricing";
@@ -321,20 +322,30 @@ export async function connectGoogleReviewSource(businessId: string, businessName
   // data to write.
   const fetched = await getReviewDataProvider("google").fetchReviews({ businessName, sourceUrl: placeId });
 
+  // Exactly the provider's per-request cap means there are probably more
+  // reviews on the actual listing than we imported — see
+  // OUTSCRAPER_REVIEWS_LIMIT's comment in lib/reviews/outscraperProvider.ts.
+  // Recorded unconditionally on every sync (not just the first) so this
+  // stays accurate if the practice's review count grows past the cap
+  // later, or drops back under it after Outscraper's own data changes.
+  const possiblyTruncated = fetched.length >= OUTSCRAPER_REVIEWS_LIMIT;
+
   let source = existingSource;
   if (!source) {
     [source] = await db
       .insert(reviewSources)
-      .values({ businessId, sourceType: "google", sourceUrl: placeId, status: "active" })
+      .values({ businessId, sourceType: "google", sourceUrl: placeId, status: "active", possiblyTruncated })
       .returning();
   } else if (source.sourceUrl !== placeId) {
     // Practice's Place ID changed (e.g. corrected a typo) — update in place
     // rather than creating a second "google" source for the same business.
     [source] = await db
       .update(reviewSources)
-      .set({ sourceUrl: placeId })
+      .set({ sourceUrl: placeId, possiblyTruncated })
       .where(eq(reviewSources.id, source.id))
       .returning();
+  } else if (source.possiblyTruncated !== possiblyTruncated) {
+    [source] = await db.update(reviewSources).set({ possiblyTruncated }).where(eq(reviewSources.id, source.id)).returning();
   }
 
   // Every business starts with the bundled demo dataset (see
@@ -378,7 +389,7 @@ export async function connectGoogleReviewSource(businessId: string, businessName
 
   await db.update(reviewSources).set({ lastSyncedAt: new Date().toISOString() }).where(eq(reviewSources.id, source.id));
 
-  return { imported, skipped, sourceId: source.id };
+  return { imported, skipped, sourceId: source.id, possiblyTruncated };
 }
 
 export async function getBusinessForAccount(accountId: string) {
@@ -751,6 +762,12 @@ export async function getDashboardData(businessId: string) {
   const positiveReviews = allReviews.filter((r) => r.rating >= 4).length;
   const negativeReviews = allReviews.filter((r) => r.rating <= 2).length;
   const avgRating = totalReviews > 0 ? allReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews : 0;
+  // "Reviews Analyzed: 45" used to read as a finished number even mid-run —
+  // this is the real "imported vs. actually analyzed" comparison, always
+  // reliable regardless of provider response shape since it only counts
+  // our own rows. Shown on the dashboard so an in-progress analysis says so
+  // plainly instead of implying completeness it doesn't have.
+  const reviewsAnalyzedCount = allReviews.filter((r) => r.analyzedWith !== null).length;
 
   const latestRun = await getLatestAnalysisRun(businessId);
   const latestReport = await getLatestWeeklyReport(businessId);
@@ -790,7 +807,7 @@ export async function getDashboardData(businessId: string) {
   // pre-connect state, or the edge case of literally zero reviews of any
   // kind) is still correctly treated as demo.
   const [googleSource] = await db
-    .select({ id: reviewSources.id })
+    .select({ id: reviewSources.id, possiblyTruncated: reviewSources.possiblyTruncated })
     .from(reviewSources)
     .where(and(eq(reviewSources.businessId, businessId), eq(reviewSources.sourceType, "google")))
     .limit(1);
@@ -799,6 +816,7 @@ export async function getDashboardData(businessId: string) {
   return {
     business,
     totalReviews,
+    reviewsAnalyzedCount,
     positivePct: totalReviews > 0 ? Math.round((positiveReviews / totalReviews) * 100) : 0,
     negativePct: totalReviews > 0 ? Math.round((negativeReviews / totalReviews) * 100) : 0,
     avgRating: Math.round(avgRating * 10) / 10,
@@ -808,6 +826,10 @@ export async function getDashboardData(businessId: string) {
     latestReport,
     rollups: [...rollups].sort((a, b) => b.mentionCount - a.mentionCount),
     hasDemoData,
+    // See the possiblyTruncated comment in lib/db/schema.pg.ts. Only ever
+    // meaningful once a google source exists; false/undefined-safe on demo
+    // data since googleSource is null there.
+    possiblyTruncated: googleSource?.possiblyTruncated ?? false,
   };
 }
 

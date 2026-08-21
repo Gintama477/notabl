@@ -10,6 +10,7 @@ function Metric({ label, value, sub }: { label: string; value: string; sub?: str
 
 export function MetricsRow({
   totalReviews,
+  reviewsAnalyzedCount,
   avgRating,
   positivePct,
   negativePct,
@@ -17,15 +18,27 @@ export function MetricsRow({
   importantThemesCount,
 }: {
   totalReviews: number;
+  // How many of totalReviews actually have themes extracted
+  // (reviews.analyzedWith IS NOT NULL) — see getDashboardData,
+  // lib/db/queries.ts. "Reviews Analyzed" used to just show totalReviews
+  // (really "reviews imported"), which read as a finished number even
+  // mid-run. When these two differ, the tile says so plainly instead of
+  // implying completeness it doesn't have.
+  reviewsAnalyzedCount: number;
   avgRating: number;
   positivePct: number;
   negativePct: number;
   emergingIssuesCount: number;
   importantThemesCount: number;
 }) {
+  const analysisComplete = reviewsAnalyzedCount >= totalReviews;
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-      <Metric label="Reviews Analyzed" value={String(totalReviews)} />
+      <Metric
+        label="Reviews Analyzed"
+        value={analysisComplete ? String(totalReviews) : `${reviewsAnalyzedCount} / ${totalReviews}`}
+        sub={analysisComplete ? undefined : "Analysis in progress"}
+      />
       <Metric label="Average Rating" value={`${avgRating.toFixed(1)} / 5`} />
       <Metric label="Positive Reviews" value={`${positivePct}%`} />
       <Metric label="Negative Reviews" value={`${negativePct}%`} />
