@@ -4,6 +4,12 @@
 // already trust, not summarizing free text, which is what prevents it from
 // inventing a trend that isn't in the data.
 
+// v5: the period CONCEPT is gone, not just reworded. No period label is
+// passed in the data any more (see lib/ai/generateReportNarrative.ts), and
+// the model is now explicitly forbidden from stating any date, date range,
+// or reporting period at all — v4 still let raw ISO dates and "compared
+// with the snapshot as of ..." bookkeeping reach the executive summary via
+// that label.
 // v4: explicit rule against phrasing a cumulative total as "this period"/
 // "this week" — under the cumulative report model every count in the data
 // is a running total across the business's full review history, not a
@@ -11,7 +17,7 @@
 // next to the dashboard's genuinely narrow "New Reviews This Week" section.
 // v3: tightened the "new" trend rule so a positive theme that merely lacks
 // prior-period mentions can't be reported as an issue to investigate.
-export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v4";
+export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v5";
 
 export function buildNarrativePrompt(structuredRollupJson: string, businessName: string): string {
   return `You are writing a patient-review report for a dental practice
@@ -33,9 +39,17 @@ never suggest changes to clinical/medical treatment decisions, only
 operational/service observations (e.g. front-desk process, scheduling,
 communication).
 
+CRITICAL — NEVER state a date, a date range, or a reporting period
+anywhere in this report, including in "executiveSummary". This report
+always covers the practice's ENTIRE review history; there is no reporting
+period, no week, and no date range to describe. Do not write "for the
+period ending...", do not write a date in any format, and do not reference
+a "snapshot." If you want to say what the report covers, say it in terms of
+the review count only — e.g. "This report covers all 200 reviews."
+
 CRITICAL — every count in the data is a CUMULATIVE TOTAL across the
-business's entire review history to date, recalculated fresh each time, NOT
-a narrow recent window. Never phrase a raw count as "this period," "this
+business's entire review history, recalculated fresh each time, NOT a
+narrow recent window. Never phrase a raw count as "this period," "this
 week," or similar — that phrasing describes a short, recent slice of time,
 which these numbers are not, and this report sits right next to a genuinely
 narrow "new reviews since your last report" section on the dashboard, so
@@ -44,7 +58,7 @@ this period" next to "0 new this week" looks broken even though neither
 number is wrong). Use "overall," "in total," or "to date" for a raw
 cumulative count. Reserve time-bounded language — "since your last
 report," "recently" — strictly for describing an actual before/after
-change between the current data and the prior snapshot ("priorMentionCount"
+change between the current data and the previous one ("priorMentionCount"
 etc.), never for a raw total.
 
 BAD example (phrases a cumulative total as if it were recent): "Professionalism
@@ -52,8 +66,13 @@ continues to receive positive mentions (86 this period)."
 GOOD example (same number, correctly framed as a total): "Professionalism has
 86 positive mentions overall, and remains a consistent strength."
 
-A theme's "trendDirection" being "new" means it had zero mentions in the
-prior snapshot — it says NOTHING about whether the theme is positive or
+BAD example (states a date range, which must never appear): "This report
+covers 200 reviews for the period 2026-08-13 to 2026-08-20."
+GOOD example (count only, no dates): "This report covers all 200 reviews
+for the practice."
+
+A theme's "trendDirection" being "new" means it had zero mentions as of the
+previous report — it says NOTHING about whether the theme is positive or
 negative. Never treat a "new" theme as an issue, and never place it in
 "emergingIssues" or reference it in "recommendedActions", unless its
 negativeCount is greater than 0 AND negativeCount >= positiveCount for that
@@ -65,7 +84,7 @@ never in "emergingIssues".
 "recommendedActions" is the most important section — every entry must be
 specific and tied directly to the numbers in the data, never generic filler.
 Each category in the data includes both its current cumulative count and its
-count as of the prior snapshot (e.g. "negativeCount" and
+count as of the previous report (e.g. "negativeCount" and
 "priorNegativeCount"). When an action is about a worsening or genuinely
 negative emerging issue (per the sentiment rule above), state the actual
 before/after counts (phrased as "since your last report," not "this

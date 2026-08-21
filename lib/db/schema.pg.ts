@@ -227,6 +227,22 @@ export const weeklyReports = pgTable("weekly_reports", {
     .notNull()
     .unique()
     .references(() => analysisRuns.id, { onDelete: "cascade" }),
+  // INTERNAL COMPARISON ANCHORS — NEVER RENDER THESE TO A CUSTOMER.
+  //
+  // Under the cumulative report model (see lib/analysis/runAnalysis.ts) a
+  // report has no "reporting period": it always covers the business's full
+  // review history, recalculated fresh. These two columns exist solely so
+  // the trend math can compare "totals now" against "totals as of the last
+  // report" — periodStart is the cutoff for that prior snapshot, nothing
+  // more. They are not a date range the report covers, and describing them
+  // as one to a customer ("Latest analysis period: ...", "full history
+  // through 2026-08-20 (compared with the snapshot as of 2026-08-13)")
+  // produced exactly the confusion this rule exists to prevent.
+  //
+  // The only date a customer ever sees about a report is createdAt, shown
+  // as "Last updated" (see lib/reports/formatLastUpdated.ts). The table and
+  // column names stay as-is on purpose — renaming them is a migration for
+  // no customer benefit.
   periodStart: text("period_start").notNull(),
   periodEnd: text("period_end").notNull(),
   executiveSummary: text("executive_summary").notNull(),

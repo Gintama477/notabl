@@ -31,7 +31,7 @@ import { NewThisWeek } from "@/components/dashboard/NewThisWeek";
 import { RunAnalysisButton } from "@/components/dashboard/RunAnalysisButton";
 import { track } from "@/lib/analytics/track";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
-import { formatReportPeriod } from "@/lib/reports/formatPeriodLabel";
+import { formatLastUpdated } from "@/lib/reports/formatLastUpdated";
 import { generateReviewRequestQrSvg } from "@/lib/reviews/reviewRequestQr";
 import { getSiteUrl } from "@/lib/siteUrl";
 
@@ -152,9 +152,14 @@ export default async function DashboardPage() {
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Dashboard</p>
               <h1 className="font-serif text-2xl font-semibold text-slate-900">{business.name}</h1>
+              {/* createdAt, NOT periodStart/periodEnd — those are internal
+                  comparison anchors for the trend math and are never shown
+                  to a customer (see lib/db/schema.pg.ts). Under the
+                  cumulative model there's no period to display; when the
+                  analysis last ran is the only date that means anything. */}
               {data.latestReport && (
                 <p className="mt-1 text-sm text-slate-500">
-                  Latest analysis period: {formatReportPeriod(data.latestReport.periodStart, data.latestReport.periodEnd)}
+                  Last updated {formatLastUpdated(data.latestReport.createdAt)}
                 </p>
               )}
             </div>

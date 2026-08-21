@@ -2,7 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
-import { getSampleBusiness, getLatestWeeklyReport, getSampleReviewsForRun, getThemeExcerptsForRun } from "@/lib/db/queries";
+import {
+  getSampleBusiness,
+  getLatestWeeklyReport,
+  getSampleReviewsForRun,
+  getThemeExcerptsForRun,
+  getReviewCountForBusiness,
+} from "@/lib/db/queries";
 import { ReportBody } from "@/components/report/ReportBody";
 import { SampleReportView } from "@/components/marketing/SampleReportView";
 
@@ -28,6 +34,7 @@ export default async function SampleReportPage() {
   // paying customer's — no allReviewsHref, since this public page has no
   // dashboard to link to.
   const excerptsByTheme = await getThemeExcerptsForRun(report.analysisRunId, 3);
+  const totalReviews = await getReviewCountForBusiness(business.id);
 
   return (
     <>
@@ -52,6 +59,7 @@ export default async function SampleReportPage() {
             businessName={business.name}
             report={report}
             sampleReviews={sampleReviews}
+            totalReviews={totalReviews}
             excerptsByTheme={excerptsByTheme}
           />
         </div>

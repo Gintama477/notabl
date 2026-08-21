@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
 import type { ThemeExcerpt } from "@/lib/db/queries";
-import { formatReportPeriod } from "@/lib/reports/formatPeriodLabel";
+import { formatLastUpdated } from "@/lib/reports/formatLastUpdated";
 import { formatReviewText } from "@/lib/reviews/formatReviewText";
 
 type ThemeRef = { category: ThemeCategory; summary: string };
@@ -17,8 +17,11 @@ type ReviewRow = {
 };
 
 type ReportRow = {
-  periodStart: string;
-  periodEnd: string;
+  // periodStart/periodEnd are deliberately NOT in this type — they're
+  // internal comparison anchors for the trend math and must never be
+  // rendered (see lib/db/schema.pg.ts). Leaving them out means a future
+  // edit can't accidentally reach for one.
+  createdAt: string;
   executiveSummary: string;
   topPositiveThemesJson: string;
   topNegativeThemesJson: string;
@@ -35,12 +38,17 @@ export function ReportBody({
   businessName,
   report,
   sampleReviews,
+  totalReviews,
   excerptsByTheme = {},
   allReviewsHref,
 }: {
   businessName: string;
   report: ReportRow;
   sampleReviews: ReviewRow[];
+  // The business's full review count. Honest and genuinely useful under
+  // the cumulative model ("covers all N reviews" is literally true); a
+  // date range in its place was neither.
+  totalReviews: number;
   // Real, verbatim quotes per theme category. Optional and defaulted to {}
   // so this component keeps working unchanged for callers that don't pass
   // it (there are none left as of this change, but it keeps the type
@@ -60,9 +68,15 @@ export function ReportBody({
   return (
     <article className="rounded-lg border border-slate-200 bg-white">
       <header className="border-b border-slate-200 px-8 py-8">
-        <p className="text-xs font-medium uppercase tracking-wide text-teal-700">Notabl Weekly Report</p>
+        {/* Not "Weekly" — there is no weekly cadence anymore (triggered
+            alerts replaced it, see lib/alerts/reviewAlerts.ts), and calling
+            it weekly sets an expectation nothing meets. */}
+        <p className="text-xs font-medium uppercase tracking-wide text-teal-700">Notabl Review Report</p>
         <h1 className="mt-1 font-serif text-3xl font-semibold text-slate-900">{businessName}</h1>
-        <p className="mt-1 text-sm text-slate-500">{formatReportPeriod(report.periodStart, report.periodEnd, fmtDate)}</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Last updated {formatLastUpdated(report.createdAt)} · Covers all {totalReviews} review
+          {totalReviews === 1 ? "" : "s"}
+        </p>
       </header>
 
       <div className="space-y-10 px-8 py-8">
@@ -97,10 +111,14 @@ export function ReportBody({
         />
 
         <section>
-          <h2 className="font-serif text-lg font-semibold text-slate-900">Changes From Last Period</h2>
-          <p className="mt-1 text-xs text-slate-400">Calculated data — direct comparison of theme mention counts, period over period.</p>
+          {/* This section describes something genuinely real — a comparison
+              against the previous snapshot — so it stays. It just says
+              "report," which a customer understands, rather than "period,"
+              which describes nothing that exists under the cumulative model. */}
+          <h2 className="font-serif text-lg font-semibold text-slate-900">What&apos;s Changed Since Your Last Report</h2>
+          <p className="mt-1 text-xs text-slate-400">Calculated data — a direct comparison of theme mention counts against your last report.</p>
           {changesFromLastPeriod.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-400">No changes of 20% or more compared with the previous period.</p>
+            <p className="mt-3 text-sm text-slate-400">No changes of 20% or more since your last report.</p>
           ) : (
             <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
               {changesFromLastPeriod.map((c, i) => (
@@ -177,7 +195,7 @@ function ThemeListSection({
     <section>
       <h2 className={`font-serif text-lg font-semibold ${accent}`}>{title}</h2>
       {items.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-400">None this period.</p>
+        <p className="mt-2 text-sm text-slate-400">None found.</p>
       ) : (
         <div className="mt-3 space-y-2">
           {items.map((t) => (

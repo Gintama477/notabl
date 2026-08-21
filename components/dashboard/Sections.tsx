@@ -46,7 +46,7 @@ export function SectionCard({
   accent,
   children,
   empty,
-  emptyMessage = "Nothing notable this period.",
+  emptyMessage = "Nothing notable to report.",
 }: {
   title: string;
   accent: string;

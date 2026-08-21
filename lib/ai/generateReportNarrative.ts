@@ -8,10 +8,16 @@ import { ThemeRollupResult } from "./computeTrends";
 
 export class NarrativeFailedError extends Error {}
 
+// No periodLabel parameter, deliberately. Under the cumulative model there
+// is no reporting period, and the label that used to be passed here ("full
+// history through 2026-08-20 (compared with the snapshot as of
+// 2026-08-13)") was the direct source of raw ISO dates and internal
+// bookkeeping leaking into the customer-facing executive summary. The model
+// doesn't need it: the prompt already states that every count is a
+// cumulative total (see lib/ai/prompts/generateNarrative.ts).
 export async function generateWeeklyNarrative(
   rollups: ThemeRollupResult[],
   totalReviews: number,
-  periodLabel: string,
   businessName: string
 ): Promise<WeeklyNarrative> {
   const provider = getAIProvider();
@@ -20,7 +26,6 @@ export async function generateWeeklyNarrative(
   const structuredRollupJson = JSON.stringify({
     themes: rollups,
     totalReviews,
-    periodLabel,
   });
 
   const attempt = async (): Promise<WeeklyNarrative> => {

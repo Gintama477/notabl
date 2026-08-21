@@ -7,7 +7,10 @@
 export type WeeklyReportEmailInput = {
   businessName: string;
   dashboardUrl: string;
-  periodLabel: string;
+  // A plain "when this was generated" date, NOT a period label — there is
+  // no reporting period under the cumulative model (see
+  // lib/reports/formatLastUpdated.ts).
+  lastUpdated: string;
   topPositiveThemeLabel: string | null;
   topPositiveThemeSummary: string | null;
   topComplaintLabel: string | null;
@@ -40,7 +43,7 @@ export function buildWeeklyReportEmailHtml(input: WeeklyReportEmailInput): strin
             <tr>
               <td style="padding:28px;font-family:Arial,sans-serif;color:#1c2530;">
                 <h1 style="font-size:20px;margin:0 0 4px 0;">${escapeHtml(input.businessName)}</h1>
-                <p style="font-size:13px;color:#64748b;margin:0 0 20px 0;">${escapeHtml(input.periodLabel)}</p>
+                <p style="font-size:13px;color:#64748b;margin:0 0 20px 0;">Last updated ${escapeHtml(input.lastUpdated)}</p>
 
                 ${
                   input.topComplaintLabel
@@ -79,7 +82,7 @@ export function buildWeeklyReportEmailHtml(input: WeeklyReportEmailInput): strin
 
 export function buildWeeklyReportEmailText(input: WeeklyReportEmailInput): string {
   const lines = [
-    `${input.businessName} — ${input.periodLabel}`,
+    `${input.businessName} — Last updated ${input.lastUpdated}`,
     "",
   ];
   if (input.topComplaintLabel) {

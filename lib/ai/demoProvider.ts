@@ -168,7 +168,6 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
       pctChangeVsPrior: number | null;
     }[];
     totalReviews: number;
-    periodLabel: string;
   };
 
   const { THEME_LABELS } = await import("@/config/themes");
@@ -248,7 +247,7 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
   const topPositive = positiveThemes[0];
   const summaryParts: string[] = [];
   summaryParts.push(
-    `This report covers ${rollup.totalReviews} review${rollup.totalReviews === 1 ? "" : "s"} for ${businessName} — ${rollup.periodLabel}.`
+    `This report covers all ${rollup.totalReviews} review${rollup.totalReviews === 1 ? "" : "s"} for ${businessName}.`
   );
   if (topPositive) {
     summaryParts.push(`${THEME_LABELS[topPositive.category]} remains a consistent strength, mentioned positively ${topPositive.positiveCount} times overall.`);

@@ -230,12 +230,13 @@ export async function runAnalysisForBusiness(
       }
     }
 
-    // Cumulative framing, matching what the narrative is actually being
-    // asked to describe: the business's full history to date, not a narrow
-    // week — totalReviews below is the cumulative count, not just what's
-    // new since last time.
-    const periodLabel = `full history through ${periodEnd.toISOString().slice(0, 10)} (compared with the snapshot as of ${periodStart.toISOString().slice(0, 10)})`;
-    const narrative = await generateWeeklyNarrative(rollups, currentReviewIds.length, periodLabel, businessName);
+    // No period label is passed — there is no reporting period under the
+    // cumulative model, and the string that used to be built here from
+    // periodStart/periodEnd was what put raw ISO dates and internal
+    // snapshot bookkeeping into the customer-facing executive summary.
+    // currentReviewIds.length is the cumulative count the narrative
+    // describes, not just what's new since last time.
+    const narrative = await generateWeeklyNarrative(rollups, currentReviewIds.length, businessName);
 
     const [report] = await db
       .insert(weeklyReports)
