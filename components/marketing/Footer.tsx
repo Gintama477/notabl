@@ -18,13 +18,20 @@ export function Footer() {
               or any review platform.
             </p>
           </div>
-          <nav className="flex flex-wrap gap-x-6 gap-y-2">
-            <Link href="/legal/terms" className="hover:text-slate-800">Terms of Service</Link>
-            <Link href="/legal/privacy" className="hover:text-slate-800">Privacy Policy</Link>
-            <Link href="/legal/ai-disclaimer" className="hover:text-slate-800">AI Disclaimer</Link>
-            <Link href="/feedback" className="hover:text-slate-800">Feedback</Link>
-            <Link href="/admin" className="hover:text-slate-800">Admin</Link>
-          </nav>
+          <div className="flex flex-col items-start gap-3 sm:items-end">
+            <Link
+              href="/feedback"
+              className="rounded-md border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-800 hover:border-teal-300 hover:bg-teal-100"
+            >
+              Have feedback? Tell us →
+            </Link>
+            <nav className="flex flex-wrap gap-x-6 gap-y-2">
+              <Link href="/legal/terms" className="hover:text-slate-800">Terms of Service</Link>
+              <Link href="/legal/privacy" className="hover:text-slate-800">Privacy Policy</Link>
+              <Link href="/legal/ai-disclaimer" className="hover:text-slate-800">AI Disclaimer</Link>
+              <Link href="/admin" className="hover:text-slate-800">Admin</Link>
+            </nav>
+          </div>
         </div>
         <p className="mt-8 text-xs text-slate-400">© {new Date().getFullYear()} Notabl.</p>
       </div>

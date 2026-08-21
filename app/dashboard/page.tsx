@@ -204,6 +204,10 @@ export default async function DashboardPage() {
                 </Link>
               )}
               <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5">
+                <Link href="/feedback" className="text-sm text-slate-500 hover:text-slate-800">
+                  Feedback
+                </Link>
+                <span aria-hidden className="h-3 w-px bg-slate-300" />
                 <Link href="/billing" className="text-sm text-slate-500 hover:text-slate-800">
                   Billing
                 </Link>
