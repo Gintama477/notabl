@@ -190,35 +190,20 @@ export default async function DashboardPage() {
               )}
             </div>
             {/*
-              Hierarchy, left to right: links to the two sub-pages (styled
-              consistently with each other, and with Run Analysis Now — same
-              outline-button treatment, since all three act on the
-              business's own data), then the one primary action (View Full
-              Report, solid teal), then the account-level items (Billing,
-              Log Out) — deliberately plain text, housekeeping rather than
-              content actions, but grouped into their own bordered pill
-              (not just a divider) so that IF this whole row still wraps on
-              a narrow viewport, that group reads as one deliberate cluster
-              wherever it lands rather than orphaned text stranded on its
-              own line.
+              ONLY actions on this page's data belong here. This row used to
+              carry three different kinds of thing at once — product
+              navigation (All Reviews, Get More Reviews), page actions (Run
+              Analysis, View Full Report) and account items (Feedback,
+              Billing, Log Out) — seven controls in one line, while the
+              header above it sat empty on app pages.
+              The first and third groups moved into the header
+              (components/marketing/Header.tsx, variant="app"), where they
+              are also available on every other app page rather than only
+              this one. Do not add them back here: Log Out in particular has
+              already been duplicated once, and two of them on one screen is
+              what that change existed to fix.
             */}
             <div className="flex flex-wrap items-center gap-2">
-              {!data.hasDemoData && (
-                <>
-                  <Link
-                    href="/dashboard/reviews"
-                    className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    All Reviews
-                  </Link>
-                  <Link
-                    href="/dashboard/review-requests"
-                    className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    Get More Reviews
-                  </Link>
-                </>
-              )}
               <RunAnalysisButton />
               {data.latestReport && (
                 <Link
@@ -228,19 +213,6 @@ export default async function DashboardPage() {
                   View Full Report
                 </Link>
               )}
-              <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5">
-                <Link href="/feedback" className="text-sm text-slate-500 hover:text-slate-800">
-                  Feedback
-                </Link>
-                <span aria-hidden className="h-3 w-px bg-slate-300" />
-                <Link href="/billing" className="text-sm text-slate-500 hover:text-slate-800">
-                  Billing
-                </Link>
-                <span aria-hidden className="h-3 w-px bg-slate-300" />
-                <form action="/api/logout" method="post">
-                  <button className="text-sm text-slate-500 hover:text-slate-800">Log Out</button>
-                </form>
-              </div>
             </div>
           </div>
 

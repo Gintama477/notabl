@@ -211,9 +211,9 @@ export default async function ReviewRequestsPage({
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Get More Reviews</p>
               <h1 className="font-serif text-2xl font-semibold text-slate-900">{business.name}</h1>
             </div>
-            <Link href="/dashboard" className="text-sm font-medium text-slate-500 hover:text-slate-800">
-              ← Back to Dashboard
-            </Link>
+            {/* No "Back to Dashboard" here — see the matching note in
+                app/dashboard/reviews/page.tsx: the app header's nav
+                provides it persistently, on every app page. */}
           </div>
 
           {data.hasDemoData ? (

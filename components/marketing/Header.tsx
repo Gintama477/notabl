@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "./Logo";
 import { TrackedCtaLink } from "./TrackedCtaLink";
 import { MobileMenu } from "./MobileMenu";
+import { AppNav } from "./AppNav";
 import { getSessionAccountId } from "@/lib/auth/session";
 
 /**
@@ -43,21 +44,49 @@ export async function Header({ variant = "marketing" }: { variant?: HeaderVarian
             Notabl
           </span>
         </Link>
-        <nav className="hidden items-center gap-8 text-sm text-slate-600 md:flex">
-          <Link href="/sample-report" className="hover:text-slate-900">
-            Sample Report
-          </Link>
-          <Link href="/pricing" className="hover:text-slate-900">
-            Pricing
-          </Link>
-          {/* Not on app pages — you're already there. */}
-          {!isApp && (
+        {/* Product navigation on app pages, marketing links on public ones.
+            A logged-in customer working in the product doesn't need Sample
+            Report and Pricing in their working header; they need the three
+            places their own data lives. */}
+        {isApp ? (
+          <AppNav className="hidden items-center gap-6 text-sm text-slate-600 md:flex" />
+        ) : (
+          <nav className="hidden items-center gap-8 text-sm text-slate-600 md:flex">
+            <Link href="/sample-report" className="hover:text-slate-900">
+              Sample Report
+            </Link>
+            <Link href="/pricing" className="hover:text-slate-900">
+              Pricing
+            </Link>
             <Link href="/dashboard" className="hover:text-slate-900">
               Dashboard
             </Link>
-          )}
-        </nav>
+          </nav>
+        )}
         <div className="flex items-center gap-3">
+          {/* Account-level items, which is what the right of an app header
+              is for. These moved up out of the dashboard's action bar,
+              which was carrying product nav, page actions and account
+              items in one seven-control row while this side sat empty.
+              They must not also appear on the page — see the comment in
+              app/dashboard/page.tsx. */}
+          {isApp && (
+            <div className="hidden items-center gap-3 text-sm text-slate-500 md:flex">
+              <Link href="/feedback" className="hover:text-slate-800">
+                Feedback
+              </Link>
+              <span aria-hidden className="h-3 w-px bg-slate-300" />
+              <Link href="/billing" className="hover:text-slate-800">
+                Billing
+              </Link>
+              <span aria-hidden className="h-3 w-px bg-slate-300" />
+              <form action="/api/logout" method="post">
+                <button type="submit" className="hover:text-slate-800">
+                  Log Out
+                </button>
+              </form>
+            </div>
+          )}
           {!isApp && (
             <>
               {loggedIn ? (

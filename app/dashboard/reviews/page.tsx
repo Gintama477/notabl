@@ -80,9 +80,10 @@ export default async function ReviewsPage({
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">All Reviews</p>
               <h1 className="font-serif text-2xl font-semibold text-slate-900">{business.name}</h1>
             </div>
-            <Link href="/dashboard" className="text-sm font-medium text-slate-500 hover:text-slate-800">
-              ← Back to Dashboard
-            </Link>
+            {/* No "Back to Dashboard" here — the app header's nav carries a
+                persistent Dashboard link a few pixels above this row, and
+                two of them on one screen is the duplication that nav
+                exists to remove. */}
           </div>
 
           {data.hasDemoData ? (
