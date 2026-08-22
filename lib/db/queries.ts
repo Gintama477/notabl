@@ -982,6 +982,48 @@ export async function findAndDraftProspects(opts: {
   return { found: found.length, added, alreadyExisted };
 }
 
+/**
+ * Rewrites subject + body on every prospect still sitting in the queue as
+ * "drafted", using whatever buildOutreachEmailSubject/buildOutreachDraftBody
+ * produce TODAY.
+ *
+ * Exists because emailSubject/emailBody are frozen into the row at draft
+ * time, so changing the template does nothing to drafts already queued —
+ * a stale-copy trap this project has hit before. Without this, the only
+ * options after a copy change are hand-editing every row or deleting and
+ * re-searching (which re-spends a billed Outscraper call).
+ *
+ * Scoped to "drafted" ONLY, matching the convention in
+ * scripts/update-drafted-outreach-signoffs.ts: "sent"/"demo_sent" rows are
+ * the historical record of what actually went out and must never be
+ * rewritten after the fact, and "skipped" rows were explicitly passed on.
+ *
+ * NOTE: this DOES overwrite hand-edited drafts — a body the admin
+ * customized in the queue is replaced by the fresh template. That's the
+ * intended behavior for a copy rollout, but it's why the caller confirms
+ * first (see RedraftDraftsButton). contactEmail is deliberately left
+ * untouched, since that's looked-up data, not template output.
+ */
+export async function redraftDraftedProspects(opts: { sampleReportUrl: string; senderName: string }) {
+  const rows = await db.select().from(prospects).where(eq(prospects.status, "drafted"));
+
+  for (const p of rows) {
+    await db
+      .update(prospects)
+      .set({
+        emailSubject: buildOutreachEmailSubject(p.businessName),
+        emailBody: buildOutreachDraftBody({
+          practiceName: p.businessName,
+          sampleReportUrl: opts.sampleReportUrl,
+          senderName: opts.senderName,
+        }),
+      })
+      .where(eq(prospects.id, p.id));
+  }
+
+  return { redrafted: rows.length };
+}
+
 export async function getProspects() {
   return db.select().from(prospects).orderBy(desc(prospects.createdAt));
 }

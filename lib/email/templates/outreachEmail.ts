@@ -21,15 +21,43 @@
 // before the body — which is the part doing the actual differentiating —
 // ever gets read. Underselling slightly in the subject is the price of
 // getting opened. Revisit if open rates say otherwise.
-export function buildOutreachEmailSubject(practiceName: string): string {
-  return `quick question about ${practiceName}'s reviews`;
+//
+// This goes one step further than that and drops the practice name
+// entirely. "quick question about {practice}'s reviews" is itself a
+// recognizable mail-merge shape — the name in the subject is the tell, not
+// the hook. "the review you haven't seen yet" reads like a person wrote it
+// and leaves a small open loop the body then pays off. Note it claims
+// nothing about their actual reviews: it's a hook, not a finding (Tier 1,
+// see the constraint list on buildOutreachDraftBody below).
+export function buildOutreachEmailSubject(
+  // Intentionally unused, and intentionally KEPT. Callers
+  // (findAndDraftProspects in lib/db/queries.ts, the re-draft action) pass
+  // the practice name, and preserving the parameter means putting it back
+  // in the subject is a one-line change if open rates ever argue for it.
+  // Do not "fix" this by interpolating it back in without re-reading the
+  // reasoning above — its absence is the point.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  practiceName: string
+): string {
+  return "the review you haven't seen yet";
 }
 
-// Leads with the PAIRING, never with either half alone. "Get more reviews"
-// on its own makes this the fifth such pitch of the month and earns "we
-// already use Weave"; "we read your reviews" on its own is the analysis-only
-// positioning this replaced. What's differentiated is doing both at $49/mo
-// with no contract and no sales call — see marketing/core-sales-message.md.
+// PROBLEM-FIRST. The opening line names a situation the reader recognizes
+// — finding out about a bad review days late — before Notabl is mentioned
+// at all. The previous version opened by describing the product's two
+// halves, which is a fine explanation but a weak hook: it asks a stranger
+// to care about a tool's architecture before they've agreed there's a
+// problem. Lead with the problem, and the pairing (watch + collect) lands
+// in the next paragraph as the answer to it rather than as a feature list.
+// The differentiation is still doing both at $49/mo with no contract and
+// no sales call — see marketing/core-sales-message.md.
+//
+// Chosen over three alternatives as the first thing to actually test: a
+// short founder note, a tightened version of the old two-halves copy, and
+// a free-audit offer. The free-audit version is held in reserve — it's the
+// strongest hook of the four but the most expensive to honor, so it's what
+// to try next if reply rates on this are poor. Recorded so the next person
+// here knows this was a decision, not a default.
 //
 // Constraints this copy has to keep holding:
 //   - No claim about THIS practice's actual reviews. The first paragraph
@@ -50,9 +78,13 @@ export function buildOutreachEmailSubject(practiceName: string): string {
 //   - Describes reports + alerts accurately: reviews become a report the
 //     owner can check anytime, and an email arrives only when something
 //     actually needs a look (lib/alerts/reviewAlerts.ts) — never a
-//     scheduled weekly email, which the product stopped sending. Reply
-//     drafting (components/dashboard/DraftReplyButton.tsx) gets one short
-//     line as a bonus, not the lead — the pairing above is still the pitch.
+//     scheduled weekly email, which the product stopped sending.
+//   - Rating and review-count targeting stays in WHO gets emailed, never
+//     in what the email says. A practice's star rating is public, so
+//     citing it wouldn't breach Tier 1 — but opening by pointing at
+//     someone's weakest number is a bad first impression and invites "how
+//     would you know what my reviews say?", which this copy avoids by
+//     talking about the general situation instead.
 export function buildOutreachDraftBody(opts: {
   practiceName: string;
   sampleReportUrl: string;
@@ -61,13 +93,15 @@ export function buildOutreachDraftBody(opts: {
   return [
     "Hi,",
     "",
-    "Most dental practices I talk to are in one of two spots with reviews: either they're not really asking for them, or they're coming in steadily and nobody has time to read through what they actually say.",
+    "Most practices find out about a bad review days later — usually because a patient mentions it, or someone happens to check.",
     "",
-    "I built a small tool called Notabl that covers both. You get a QR code for the front desk that lets a patient leave a Google review in a couple of taps, and every review that comes in gets turned into a plain-language report you can check anytime — what's going well, what's coming up more often, and what's new. You only get an email from us when something actually needs a look, like a low-rated review — not a weekly report nobody reads. It'll also draft a reply for you when you want one.",
+    "I built a small tool called Notabl that watches for you. It emails you the same day a review needs attention, turns the rest into a plain-language summary of what patients keep bringing up, and gives you a front-desk QR code so the happy ones actually leave a review.",
     "",
-    "It's $49/month, no contract and no sales call — less than most tools in this space charge for just one of those pieces.",
+    "It's $49/month, no contract and no sales call.",
     "",
-    `Worth a 10-minute look? Here's a sample report so you can see the format before we talk: ${opts.sampleReportUrl}`,
+    `Here's a sample report so you can see the format: ${opts.sampleReportUrl}`,
+    "",
+    "Worth 10 minutes?",
     "",
     opts.senderName,
   ].join("\n");

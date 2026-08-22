@@ -3,7 +3,7 @@ import { formatPrice } from "@/config/pricing";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { PilotInviteForm, PilotToggleTable, PilotRow, ConnectGoogleReviewsForm } from "@/components/admin/PilotManagement";
-import { FindProspectsForm, OutreachQueueTable, ProspectRow } from "@/components/admin/OutreachQueue";
+import { OutreachControls, OutreachQueueTable, ProspectRow } from "@/components/admin/OutreachQueue";
 
 // Intentionally minimal per the development rule ("do NOT overbuild the
 // admin dashboard") — raw numbers, no charts library, no pagination.
@@ -238,7 +238,7 @@ export default async function AdminPage({
               Nothing sends automatically — review and edit each draft below, then click Send yourself,
               one practice at a time. See docs/OUTREACH-AUTOMATION.md.
             </p>
-            <FindProspectsForm />
+            <OutreachControls />
           </div>
           <OutreachQueueTable rows={prospectRows} />
         </Section>

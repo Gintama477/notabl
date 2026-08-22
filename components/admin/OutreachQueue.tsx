@@ -139,6 +139,76 @@ export function FindProspectsForm() {
   );
 }
 
+/**
+ * Rewrites every still-"drafted" prospect with the current email template.
+ * Needed because emailSubject/emailBody are frozen into the row when the
+ * prospect is first found, so changing the copy in
+ * lib/email/templates/outreachEmail.ts does nothing to what's already
+ * queued — the alternative is deleting the rows and re-running a billed
+ * Outscraper search just to pick up new wording.
+ *
+ * Confirms first, because this legitimately discards hand-edits: a body
+ * customized in the queue below gets replaced by the fresh template.
+ * Contact emails are left alone (looked-up data, not template output).
+ */
+function RedraftDraftsButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function redraft() {
+    if (
+      !confirm(
+        "Rewrite all drafted prospects with the current email template?\n\nThis replaces any hand-edited draft text (contact emails are kept). Already-sent and skipped prospects are not touched."
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/outreach/redraft", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setMessage(data?.error || "Re-draft failed.");
+      } else {
+        setMessage(`Re-drafted ${data.redrafted} prospect(s) with the current template.`);
+        router.refresh();
+      }
+    } catch {
+      setMessage("Re-draft failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        onClick={redraft}
+        disabled={busy}
+        className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+      >
+        {busy ? "Re-drafting…" : "Re-draft all with current template"}
+      </button>
+      <span className="text-xs text-slate-400">
+        Drafts keep the wording they were created with — use this after the email copy changes.
+      </span>
+      {message && <span className="text-xs text-slate-600">{message}</span>}
+    </div>
+  );
+}
+
+export function OutreachControls() {
+  return (
+    <>
+      <FindProspectsForm />
+      <RedraftDraftsButton />
+    </>
+  );
+}
+
 function statusLabel(status: string): string {
   switch (status) {
     case "drafted":
