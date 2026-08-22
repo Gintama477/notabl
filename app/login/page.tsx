@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getSessionAccountId } from "@/lib/auth/session";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 
@@ -13,6 +15,13 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+
+  // Same guard as app/signup/page.tsx, same reasoning — someone already
+  // logged in has no business on a login form. Deliberately NOT applied to
+  // app/login/check-email/page.tsx: that one is mid-flow, where a session
+  // legitimately may not exist yet.
+  const accountId = await getSessionAccountId();
+  if (accountId) redirect("/dashboard");
 
   return (
     <>

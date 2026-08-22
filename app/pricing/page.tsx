@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PrimaryCta } from "@/components/marketing/PrimaryCta";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import { PLANS, DEFAULT_PLAN, formatPrice } from "@/config/pricing";
@@ -37,12 +38,10 @@ export default async function PricingPage() {
               </li>
             ))}
           </ul>
-          <Link
-            href="/signup"
+          <PrimaryCta
+            label="Start Free Trial"
             className="mt-8 block rounded-md bg-teal-700 px-6 py-3 text-center text-sm font-medium text-white hover:bg-teal-800"
-          >
-            Start Free Trial
-          </Link>
+          />
           <p className="mt-3 text-center text-xs text-slate-400">
             No credit card required to start your trial.
           </p>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PLANS, DEFAULT_PLAN, formatPrice } from "@/config/pricing";
-import { TrackedCtaLink } from "./TrackedCtaLink";
+import { PrimaryCta } from "./PrimaryCta";
 
 export function Hero() {
   const plan = PLANS[DEFAULT_PLAN];
@@ -39,12 +39,10 @@ export function Hero() {
               your attention — not on a schedule, only when it matters.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <TrackedCtaLink
-                href="/signup"
+              <PrimaryCta
+                trackAsMainCta
                 className="rounded-md bg-teal-700 px-6 py-3 text-center text-sm font-medium text-white shadow-sm shadow-teal-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-md hover:shadow-teal-900/20"
-              >
-                Analyze My Reviews
-              </TrackedCtaLink>
+              />
               <Link
                 href="/sample-report"
                 className="rounded-md border border-slate-300 bg-white px-6 py-3 text-center text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md"

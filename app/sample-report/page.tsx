@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PrimaryCta } from "@/components/marketing/PrimaryCta";
 import { Header } from "@/components/marketing/Header";
 import { Footer } from "@/components/marketing/Footer";
 import {
@@ -51,12 +51,7 @@ export default async function SampleReportPage() {
               fictional practice, &ldquo;Brightview Family Dental&rdquo; — so you can see exactly what you&apos;ll get. No
               signup required to view it.
             </p>
-            <Link
-              href="/signup"
-              className="mt-3 inline-block rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
-            >
-              Analyze My Reviews
-            </Link>
+            <PrimaryCta className="mt-3 inline-block rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800" />
           </div>
           <ReportBody
             businessName={business.name}

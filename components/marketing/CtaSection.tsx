@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PLANS, DEFAULT_PLAN, formatPrice } from "@/config/pricing";
-import { TrackedCtaLink } from "./TrackedCtaLink";
+import { PrimaryCta } from "./PrimaryCta";
 
 export function CtaSection() {
   const plan = PLANS[DEFAULT_PLAN];
@@ -16,12 +16,10 @@ export function CtaSection() {
           no signup needed — then try the full dashboard for {plan.trialDays} days.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <TrackedCtaLink
-            href="/signup"
+          <PrimaryCta
+            trackAsMainCta
             className="rounded-md bg-teal-700 px-6 py-3 text-sm font-medium text-white shadow-sm shadow-teal-900/10 transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-800 hover:shadow-md hover:shadow-teal-900/20"
-          >
-            Analyze My Reviews
-          </TrackedCtaLink>
+          />
           <Link
             href="/pricing"
             className="rounded-md border border-slate-300 bg-white px-6 py-3 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md"
