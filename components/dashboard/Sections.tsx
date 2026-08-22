@@ -89,14 +89,56 @@ export function WhatPatientsLove({ items, excerptsByTheme }: { items: ThemeRef[]
   );
 }
 
-export function WhatPatientsDislike({ items, excerptsByTheme }: { items: ThemeRef[]; excerptsByTheme?: ExcerptsByTheme }) {
+// For a genuinely good practice, "items" (the AI narrative's top negative
+// themes) is often legitimately empty — that's the common case, not an
+// edge case (see app/dashboard/page.tsx). An empty card reads as broken;
+// inventing a complaint the data doesn't support is worse (the same
+// failure mode as the "investigate professionalism" bug this product has
+// already been burned by once). So when there's nothing negative to show,
+// this falls back to weakestThemes — the 2-3 rollup themes with the lowest
+// positive ratio, computed and filtered by the caller to guarantee they're
+// still net non-negative — and relabels the whole section so it reads as
+// relative comparison, never as complaints.
+export function WhatPatientsDislike({
+  items,
+  weakestThemes = [],
+  totalReviews,
+  excerptsByTheme,
+}: {
+  items: ThemeRef[];
+  weakestThemes?: ThemeRef[];
+  totalReviews: number;
+  excerptsByTheme?: ExcerptsByTheme;
+}) {
+  const usingFallback = items.length === 0 && weakestThemes.length > 0;
+  const displayed = items.length > 0 ? items : weakestThemes;
+  const title = usingFallback ? "Where You're Least Strong" : "What Patients Dislike";
+  const accent = usingFallback ? "text-slate-700" : "text-red-800";
+  const barColor = usingFallback ? "border-slate-300" : "border-red-600";
+  const sentiment = usingFallback ? "positive" : "negative";
+
   return (
-    <SectionCard title="What Patients Dislike" accent="text-red-800" empty={items.length === 0}>
-      {items.map((t) => (
-        <div key={t.category} className="border-l-2 border-red-600 pl-3">
+    <SectionCard
+      title={title}
+      accent={accent}
+      empty={displayed.length === 0}
+      // Only reachable when there's ALSO no rollup data to fall back on
+      // (e.g. nothing analyzed yet) — a true "nothing available," not "no
+      // complaints found," so it gets its own honest wording rather than
+      // reusing the fallback's copy.
+      emptyMessage={`No theme data yet across ${totalReviews} review${totalReviews === 1 ? "" : "s"}.`}
+    >
+      {usingFallback && (
+        <p className="text-xs text-slate-500">
+          No recurring complaints found across {totalReviews} review{totalReviews === 1 ? "" : "s"}. That&apos;s
+          unusual — the themes below are the closest thing to a weak spot.
+        </p>
+      )}
+      {displayed.map((t) => (
+        <div key={t.category} className={`border-l-2 ${barColor} pl-3`}>
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
           <p className="text-sm text-slate-600">{t.summary}</p>
-          <QuoteList quotes={excerptsByTheme?.[t.category]?.negative} />
+          <QuoteList quotes={excerptsByTheme?.[t.category]?.[sentiment]} />
         </div>
       ))}
     </SectionCard>
