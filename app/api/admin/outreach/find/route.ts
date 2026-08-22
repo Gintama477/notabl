@@ -9,7 +9,7 @@ const FindSchema = z.object({
   city: z.string().min(1).max(120),
   state: z.string().min(1).max(60),
   category: z.string().max(80).optional().or(z.literal("")),
-  limit: z.number().int().min(1).max(50).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
 });
 
 // Admin-only. Finds public dental-practice listings (name, address, phone,

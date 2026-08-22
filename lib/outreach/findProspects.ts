@@ -87,7 +87,11 @@ export async function findProspects(opts: {
   }
 
   const category = opts.category?.trim() || "Dentist";
-  const limit = opts.limit && opts.limit > 0 ? Math.min(opts.limit, 50) : 20;
+  // Capped at 100 (raised from 50). A search near that size can run past
+  // the 60s ceiling on the calling route — see the maxDuration comment in
+  // app/api/admin/outreach/find/route.ts, and the warning under the form's
+  // limit input. 20 stays the default when the caller doesn't ask.
+  const limit = opts.limit && opts.limit > 0 ? Math.min(opts.limit, 100) : 20;
   const query = `${category}, ${opts.city}, ${opts.state}, US`;
 
   const url = new URL(OUTSCRAPER_SEARCH_ENDPOINT);

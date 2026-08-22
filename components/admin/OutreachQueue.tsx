@@ -31,6 +31,10 @@ export function FindProspectsForm() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [category, setCategory] = useState("");
+  // How many listings to pull for this city. Held as a string so the field
+  // can be cleared while typing; parsed on submit, where an empty or
+  // unparseable value falls back to the server's own default of 20.
+  const [limit, setLimit] = useState("20");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -38,11 +42,16 @@ export function FindProspectsForm() {
     e.preventDefault();
     setSubmitting(true);
     setResult(null);
+    const parsedLimit = Number(limit);
+    const limitToSend = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(Math.trunc(parsedLimit), 100) : undefined;
     try {
       const res = await fetch("/api/admin/outreach/find", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city, state, category: category || undefined }),
+        // limit was the whole bug here: findProspects() and the route's
+        // schema have always accepted one, but this body never sent it, so
+        // every search silently used the default of 20.
+        body: JSON.stringify({ city, state, category: category || undefined, limit: limitToSend }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -55,14 +64,23 @@ export function FindProspectsForm() {
         router.refresh();
       }
     } catch {
-      setResult({ ok: false, message: "Search failed. Please try again." });
+      // A search killed by the route's 60s ceiling lands here as a bare
+      // network failure with no response body to quote, so say what almost
+      // certainly happened instead of a generic "try again" — a large
+      // limit is the usual cause and the actionable fix is a smaller one.
+      setResult({
+        ok: false,
+        message:
+          `Search failed — no response from the server${limitToSend && limitToSend > 50 ? ` (you asked for ${limitToSend})` : ""}. ` +
+          "A large search can exceed the 60-second limit; try 50 or fewer, or a more specific city.",
+      });
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-5">
+    <form onSubmit={handleSubmit} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-6">
       <input
         value={city}
         onChange={(e) => setCity(e.target.value)}
@@ -83,6 +101,16 @@ export function FindProspectsForm() {
         placeholder="Category (default: Dentist)"
         className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
       />
+      <input
+        type="number"
+        min={1}
+        max={100}
+        value={limit}
+        onChange={(e) => setLimit(e.target.value)}
+        placeholder="How many"
+        title="How many listings to find for this city (1-100)"
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-1"
+      />
       <button
         type="submit"
         disabled={submitting}
@@ -97,8 +125,13 @@ export function FindProspectsForm() {
           "Find Prospects"
         )}
       </button>
+      <p className="text-xs text-slate-400 sm:col-span-6">
+        How many listings to pull for this city, 1-100 (default 20). Larger searches take longer and can time out
+        past the 60-second limit — if 100 fails, try 50. Outscraper may also return fewer than you ask for if the
+        city genuinely has fewer listings; that&apos;s normal, not an error.
+      </p>
       {result && (
-        <div className={`sm:col-span-5 text-xs ${result.ok ? "text-teal-800" : "text-red-700"}`}>
+        <div className={`sm:col-span-6 text-xs ${result.ok ? "text-teal-800" : "text-red-700"}`}>
           <p>{result.message}</p>
         </div>
       )}
@@ -121,6 +154,65 @@ function statusLabel(status: string): string {
   }
 }
 
+const UNKNOWN_LOCATION = "Unknown location";
+
+// Short form of statusLabel above, for the per-city summary line — the long
+// labels ("Drafted — needs review") don't fit a header. Same status values,
+// no new ones invented.
+function shortStatusLabel(status: string): string {
+  switch (status) {
+    case "drafted":
+      return "drafted";
+    case "sent":
+      return "sent";
+    case "demo_sent":
+      return "demo-sent";
+    case "skipped":
+      return "skipped";
+    default:
+      return status;
+  }
+}
+
+/**
+ * Splits the flat prospect list into one group per "City, ST". Searching
+ * two cities used to produce one undifferentiated list of 40 rows with no
+ * way to tell where a practice was without reading every line.
+ *
+ * Row order within a group is left exactly as it arrives (newest-first from
+ * getProspects) — grouping is presentational and shouldn't reshuffle what's
+ * inside a city. Groups themselves are ordered biggest-first so the cities
+ * with the most queued work come first, with "Unknown location" pinned last
+ * since it's a should-never-happen bucket (the type allows a null city) and
+ * doesn't deserve top billing if it ever fills up.
+ */
+function groupProspectsByCity(rows: ProspectRow[]) {
+  const byCity = new Map<string, ProspectRow[]>();
+  for (const row of rows) {
+    const label = row.city ? [row.city, row.state].filter(Boolean).join(", ") : UNKNOWN_LOCATION;
+    const existing = byCity.get(label);
+    if (existing) existing.push(row);
+    else byCity.set(label, [row]);
+  }
+
+  return [...byCity.entries()]
+    .map(([label, groupRows]) => {
+      const statusCounts = new Map<string, number>();
+      for (const r of groupRows) statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
+      const summary = [
+        `${groupRows.length} prospect${groupRows.length === 1 ? "" : "s"}`,
+        ...[...statusCounts.entries()].map(([status, n]) => `${n} ${shortStatusLabel(status)}`),
+      ].join(" · ");
+      return { label, rows: groupRows, summary };
+    })
+    .sort((a, b) => {
+      const aUnknown = a.label === UNKNOWN_LOCATION;
+      const bUnknown = b.label === UNKNOWN_LOCATION;
+      if (aUnknown !== bUnknown) return aUnknown ? 1 : -1;
+      return b.rows.length - a.rows.length || a.label.localeCompare(b.label);
+    });
+}
+
 export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -129,16 +221,31 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
     return <p className="p-4 text-sm text-slate-400">No prospects yet — use the form above to find some.</p>;
   }
 
+  const groups = groupProspectsByCity(rows);
+
   return (
-    <div className="divide-y divide-slate-100">
-      {rows.map((r) => (
-        <ProspectRowItem
-          key={r.id}
-          row={r}
-          expanded={expandedId === r.id}
-          onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
-          onChanged={() => router.refresh()}
-        />
+    <div>
+      {groups.map((group) => (
+        <div key={group.label}>
+          {/* Sticky so the city stays visible while scrolling a long group —
+              the whole point is never having to wonder which city a row
+              belongs to. */}
+          <div className="sticky top-0 z-10 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-y border-slate-200 bg-slate-50 px-4 py-2">
+            <p className="text-sm font-semibold text-slate-800">{group.label}</p>
+            <p className="text-xs text-slate-500">{group.summary}</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {group.rows.map((r) => (
+              <ProspectRowItem
+                key={r.id}
+                row={r}
+                expanded={expandedId === r.id}
+                onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                onChanged={() => router.refresh()}
+              />
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -292,10 +399,14 @@ function ProspectRowItem({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-slate-900">{row.businessName}</p>
+          {/* No city here anymore — the group header directly above every
+              row already says it, and repeating it on all 40 rows was
+              noise. Rating leads instead: it's the signal for who's
+              actually worth contacting. */}
           <p className="text-xs text-slate-500">
-            {[row.city, row.state].filter(Boolean).join(", ") || "—"}
-            {row.googleRating != null && ` · ${row.googleRating}★ (${row.googleReviewCount ?? 0} reviews)`}
-            {" · "}
+            {row.googleRating != null
+              ? `${row.googleRating.toFixed(1)} ★ · ${row.googleReviewCount ?? 0} reviews · `
+              : "No rating · "}
             {statusLabel(row.status)}
           </p>
           {row.skipReason && row.status === "skipped" && (
