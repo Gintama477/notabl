@@ -51,7 +51,7 @@ export default async function WeeklyReportPage({ params }: { params: Promise<{ i
   return (
     <>
       <BfcacheGuard />
-      <Header />
+      <Header variant="app" />
       {hasDemoData && (
         <DemoDataBanner showSubscriptionCta={!isActiveOrTrialing} hasUsedTrialBefore={hasUsedTrialBefore} />
       )}

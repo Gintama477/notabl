@@ -72,7 +72,7 @@ export default async function ReviewsPage({
   return (
     <>
       <BfcacheGuard />
-      <Header />
+      <Header variant="app" />
       <main className="flex-1 bg-slate-50 py-10">
         <div className="mx-auto max-w-3xl px-6">
           <div className="flex items-center justify-between gap-4">

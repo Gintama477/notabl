@@ -14,7 +14,7 @@ export default async function DemoCheckoutPage() {
 
   return (
     <>
-      <Header />
+      <Header variant="app" />
       <main className="flex-1 bg-slate-50 py-16">
         <div className="mx-auto max-w-sm px-6">
           <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

@@ -17,8 +17,15 @@ import Link from "next/link";
  * leave a dead zone between 640-768px where the middle nav is already
  * hidden (`md:flex`) but this hasn't appeared yet either.
  */
-export function MobileMenu({ loggedIn }: { loggedIn: boolean }) {
+export function MobileMenu({ loggedIn, variant = "marketing" }: { loggedIn: boolean; variant?: "marketing" | "app" }) {
   const [open, setOpen] = useState(false);
+  // Same rules as the desktop header (see Header.tsx): on app pages, drop
+  // the Dashboard link and Log Out, because the page's own action bar
+  // carries Log Out (alongside Feedback and Billing) and is visible at
+  // every width — so keeping them here would reproduce the exact
+  // duplication this variant exists to remove, just below the md
+  // breakpoint instead of above it.
+  const isApp = variant === "app";
 
   return (
     <div className="md:hidden">
@@ -49,20 +56,23 @@ export function MobileMenu({ loggedIn }: { loggedIn: boolean }) {
             <Link href="/pricing" onClick={() => setOpen(false)} className="hover:text-slate-900">
               Pricing
             </Link>
-            <Link href="/dashboard" onClick={() => setOpen(false)} className="hover:text-slate-900">
-              Dashboard
-            </Link>
-            {loggedIn ? (
-              <form action="/api/logout" method="post">
-                <button type="submit" className="text-left hover:text-slate-900">
-                  Log Out
-                </button>
-              </form>
-            ) : (
-              <Link href="/login" onClick={() => setOpen(false)} className="hover:text-slate-900">
-                Log In
+            {!isApp && (
+              <Link href="/dashboard" onClick={() => setOpen(false)} className="hover:text-slate-900">
+                Dashboard
               </Link>
             )}
+            {!isApp &&
+              (loggedIn ? (
+                <form action="/api/logout" method="post">
+                  <button type="submit" className="text-left hover:text-slate-900">
+                    Log Out
+                  </button>
+                </form>
+              ) : (
+                <Link href="/login" onClick={() => setOpen(false)} className="hover:text-slate-900">
+                  Log In
+                </Link>
+              ))}
           </nav>
         </div>
       )}

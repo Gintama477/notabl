@@ -152,7 +152,7 @@ export default async function DashboardPage() {
   return (
     <>
       <BfcacheGuard />
-      <Header />
+      <Header variant="app" />
       {data.hasDemoData && (
         <DemoDataBanner showSubscriptionCta={!isActiveOrTrialing} hasUsedTrialBefore={hasUsedTrialBefore} />
       )}

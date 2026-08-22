@@ -60,7 +60,7 @@ export default async function BillingPage({
   return (
     <>
       <BfcacheGuard />
-      <Header />
+      <Header variant="app" />
       <main className="flex-1 bg-slate-50 py-16">
         <div className="mx-auto max-w-lg px-6">
           <h1 className="font-serif text-2xl font-semibold text-slate-900">Billing</h1>
