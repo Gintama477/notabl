@@ -233,14 +233,33 @@ export async function sendOutreachEmail(opts: {
   // the address — deliberately a separate env var from EMAIL_FROM_NAME
   // (used by the other four senders below).
   const fromName = process.env.OUTREACH_SENDER_NAME || "Notabl";
-  // Same REPLY_TO_ADDRESS as every other sender below (falls back to
-  // EMAIL_FROM_ADDRESS, not OUTREACH_FROM_ADDRESS) — replies from a prospect
-  // should land in the same real inbox as replies to product emails, not
-  // get split across two addresses.
-  const replyToAddress = process.env.REPLY_TO_ADDRESS || process.env.EMAIL_FROM_ADDRESS || "support@trynotabl.com";
+  // Replies follow the sender, which is what a human expects: hit reply on
+  // a personal-sounding email from hello@ and you reach hello@.
+  //
+  // This deliberately does NOT use the shared REPLY_TO_ADDRESS the other
+  // senders use. That earlier reasoning — one inbox for every reply —
+  // predates the three-address scheme:
+  //   hello@         cold outreach to prospects (this sender)
+  //   support@       help, and the address printed on the legal pages
+  //   notifications@ automated alerts and transactional email
+  // Under that scheme, routing a prospect's reply to a personal sales
+  // email into support@ makes a sales conversation arrive as a support
+  // ticket. OUTREACH_REPLY_TO_ADDRESS exists to override this if replies
+  // ever need to land somewhere other than the sending address, but the
+  // default is simply "reply to whoever sent it."
+  //
+  // Every other sender in this file is unchanged and should stay that way:
+  // an automated notification from notifications@ replying to support@ is
+  // exactly right.
+  const replyToAddress = process.env.OUTREACH_REPLY_TO_ADDRESS || fromAddress;
 
   if (!apiKey) {
-    console.log(`[demo email] Would send outreach "${opts.subject}" to ${opts.recipientEmail}`);
+    // from/replyTo included so demo mode actually verifies the addressing,
+    // not just that a send was attempted — the whole point of this change
+    // is which addresses get used.
+    console.log(
+      `[demo email] Would send outreach "${opts.subject}" to ${opts.recipientEmail} from ${fromName} <${fromAddress}> (reply-to: ${replyToAddress})`
+    );
     return { sent: false, demo: true };
   }
 
