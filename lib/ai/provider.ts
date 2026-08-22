@@ -43,7 +43,7 @@ class ClaudeProvider implements AIProvider {
     this.client = new Anthropic({ apiKey });
   }
 
-  private async callJson(prompt: string): Promise<unknown> {
+  private async callOnce(prompt: string): Promise<unknown> {
     const msg = await this.client.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 1024,
@@ -53,6 +53,28 @@ class ClaudeProvider implements AIProvider {
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("AI response did not contain JSON");
     return JSON.parse(match[0]);
+  }
+
+  // A 429 (Anthropic.RateLimitError) means we're calling faster than the
+  // account's per-minute limit allows — expected to happen occasionally
+  // now that lib/analysis/runAnalysis.ts's extraction loop fires several
+  // of these concurrently instead of one at a time. A short fixed delay
+  // then a single retry rides out a transient limit instead of failing
+  // the review outright; extractReviewThemes's own blind retry-once
+  // (lib/ai/extractReview.ts) has no delay and isn't 429-aware, so it
+  // wouldn't reliably help here on its own. If 429s persist even with
+  // this, the fix is a lower BATCH_SIZE in runAnalysis.ts, not a longer
+  // delay here.
+  private async callJson(prompt: string): Promise<unknown> {
+    try {
+      return await this.callOnce(prompt);
+    } catch (err) {
+      if (err instanceof Anthropic.RateLimitError) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return await this.callOnce(prompt);
+      }
+      throw err;
+    }
   }
 
   async analyzeReview(reviewText: string, rating: number): Promise<ReviewExtraction> {

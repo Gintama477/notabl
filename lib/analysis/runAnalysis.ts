@@ -128,59 +128,65 @@ export async function runAnalysisForBusiness(
     // each review's stored analyzedWith below.
     const currentVersion = `${provider.name}/${provider.promptVersion}`;
 
+    // analyzedAt + analyzedWith (not "does a theme_mentions row exist") is
+    // the source of truth for "already processed with the current
+    // provider" — a review can legitimately produce zero theme matches and
+    // must still never be re-billed once it's current. A review analyzed
+    // by a DIFFERENT provider/prompt version (analyzedWith mismatch,
+    // including null on pre-tracking rows — always stale by construction)
+    // is treated the same as never-analyzed, so switching from
+    // DemoProvider to real Claude re-analyzes everything automatically,
+    // and a future prompt-version bump does the same.
+    const staleReviews = allBusinessReviews.filter((r) => !(r.analyzedAt && r.analyzedWith === currentVersion));
+
     let newlyAnalyzed = 0;
     let reviewsRemaining = 0;
-    let budgetExceeded = false;
     const loopStartedAt = Date.now();
 
-    for (const review of allBusinessReviews) {
-      // analyzedAt + analyzedWith (not "does a theme_mentions row exist")
-      // is the source of truth for "already processed with the current
-      // provider" — a review can legitimately produce zero theme matches
-      // and must still never be re-billed once it's current. A review
-      // analyzed by a DIFFERENT provider/prompt version (analyzedWith
-      // mismatch, including null on pre-tracking rows — always stale by
-      // construction) is treated the same as never-analyzed, so switching
-      // from DemoProvider to real Claude re-analyzes everything
-      // automatically, and a future prompt-version bump does the same.
-      const isCurrent = review.analyzedAt && review.analyzedWith === currentVersion;
-      if (isCurrent) continue;
+    // Each extractReviewThemes() call is a fully independent HTTP
+    // round-trip to the AI provider — one review's text in, that review's
+    // themes out — nothing about the work requires them to run one at a
+    // time, it just used to. Sequential, that was ~4s/review against real
+    // Claude (12-13 reviews per 45s budget window), meaning a paying
+    // customer's first connect on a 400-review practice took ~27 minutes
+    // before seeing a real report. BATCH_SIZE=5 is the starting point
+    // specified for this fix, not yet tuned against Anthropic's actual
+    // per-minute limits under real load — lower it if 429s start showing
+    // up in the logs (a single 429 is separately retried once after a
+    // short delay inside ClaudeProvider.callJson, lib/ai/provider.ts, but
+    // that's a safety net for an occasional one, not a substitute for
+    // choosing a concurrency level the account's real rate limit supports).
+    const BATCH_SIZE = 5;
 
-      if (budgetExceeded || Date.now() - loopStartedAt > EXTRACTION_BUDGET_MS) {
-        budgetExceeded = true;
-        reviewsRemaining++;
-        continue;
+    for (let i = 0; i < staleReviews.length; i += BATCH_SIZE) {
+      // Budget checked BETWEEN batches, not mid-batch — every review in an
+      // in-flight batch is let finish so none is left half-processed
+      // (stale mentions deleted but fresh ones never written). Whatever
+      // hasn't been attempted yet when the budget runs out is reported as
+      // reviewsRemaining, same as the old per-review check did one at a
+      // time.
+      if (Date.now() - loopStartedAt > EXTRACTION_BUDGET_MS) {
+        reviewsRemaining += staleReviews.length - i;
+        break;
       }
 
-      // Delete any existing mentions before inserting fresh ones. Required
-      // whenever this is a RE-analysis (the review already has
-      // review_theme_mentions rows from a prior, now-stale, provider
-      // version) — without this, every theme gets counted twice and the
-      // rollups silently double. A harmless no-op (0 rows) the first time
-      // a review is ever analyzed.
-      await db.delete(reviewThemeMentions).where(eq(reviewThemeMentions.reviewId, review.id));
+      const batch = staleReviews.slice(i, i + BATCH_SIZE);
+      // allSettled, not all: one review's extraction failing (a bad AI
+      // response, a transient network error) must not discard the other
+      // up-to-4 reviews' completed work in the same batch. A failed review
+      // simply stays un-analyzed — analyzedAt/analyzedWith is never
+      // touched for it — and gets picked up by the next run automatically,
+      // the same resumable design that already handles a budget cutoff.
+      const outcomes = await Promise.allSettled(batch.map((review) => analyzeOneReview(review, currentVersion, run.id)));
 
-      const extraction = await extractReviewThemes(review.reviewText, review.rating);
-      newlyAnalyzed++;
-
-      if (extraction.themes.length > 0) {
-        await db.insert(reviewThemeMentions).values(
-          extraction.themes.map((t) => ({
-            reviewId: review.id,
-            analysisRunId: run.id,
-            themeCategory: t.category,
-            sentiment: t.sentiment,
-            severity: t.severity,
-            confidence: t.confidence,
-            excerpt: t.excerpt ?? null,
-          }))
-        );
+      for (const outcome of outcomes) {
+        if (outcome.status === "fulfilled") {
+          newlyAnalyzed++;
+        } else {
+          console.error("Review extraction failed, will retry next run:", outcome.reason);
+          reviewsRemaining++;
+        }
       }
-
-      await db
-        .update(reviews)
-        .set({ analyzedAt: new Date().toISOString(), analyzedWith: currentVersion })
-        .where(eq(reviews.id, review.id));
     }
 
     // Cumulative model: every report's theme rollup reflects the business's
@@ -386,6 +392,47 @@ export async function runAnalysisForBusiness(
 
     throw err;
   }
+}
+
+// One review's worth of extraction work — delete stale mentions, extract,
+// write fresh mentions plus the analyzedAt/analyzedWith stamp. Pulled out
+// of the batch loop above so Promise.allSettled there can run several of
+// these concurrently: each call only ever touches ITS OWN review's rows
+// (delete/insert on review_theme_mentions scoped by reviewId, update on
+// reviews scoped by id), so nothing here needs to coordinate with any
+// other in-flight call — safe to run in parallel by construction, not
+// just in practice. Throws on failure (extraction error, malformed
+// response) rather than swallowing it; the caller's allSettled is what
+// isolates one review's failure from the rest of its batch.
+async function analyzeOneReview(review: typeof reviews.$inferSelect, currentVersion: string, analysisRunId: string): Promise<void> {
+  // Delete any existing mentions before inserting fresh ones. Required
+  // whenever this is a RE-analysis (the review already has
+  // review_theme_mentions rows from a prior, now-stale, provider version)
+  // — without this, every theme gets counted twice and the rollups
+  // silently double. A harmless no-op (0 rows) the first time a review is
+  // ever analyzed.
+  await db.delete(reviewThemeMentions).where(eq(reviewThemeMentions.reviewId, review.id));
+
+  const extraction = await extractReviewThemes(review.reviewText, review.rating);
+
+  if (extraction.themes.length > 0) {
+    await db.insert(reviewThemeMentions).values(
+      extraction.themes.map((t) => ({
+        reviewId: review.id,
+        analysisRunId,
+        themeCategory: t.category,
+        sentiment: t.sentiment,
+        severity: t.severity,
+        confidence: t.confidence,
+        excerpt: t.excerpt ?? null,
+      }))
+    );
+  }
+
+  await db
+    .update(reviews)
+    .set({ analyzedAt: new Date().toISOString(), analyzedWith: currentVersion })
+    .where(eq(reviews.id, review.id));
 }
 
 // Given a set of review ids, returns their theme mentions. Callers are
