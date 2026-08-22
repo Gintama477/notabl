@@ -4,6 +4,10 @@ import { redraftDraftedProspects } from "@/lib/db/queries";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { getSiteUrl } from "@/lib/siteUrl";
 
+// Bulk-updates every drafted prospect row. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 // Admin-only. Regenerates the subject and body of every "drafted" prospect
 // from the CURRENT outreach template — the fix for the fact that
 // emailSubject/emailBody are frozen at draft time, so a copy change leaves

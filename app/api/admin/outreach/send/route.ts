@@ -3,6 +3,10 @@ import { z } from "zod";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { sendProspectEmail } from "@/lib/db/queries";
 
+// Sends a real outreach email via Resend. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 const SendSchema = z.object({ prospectId: z.string().min(1) });
 
 // Admin-only, one prospect at a time — this is the actual "approve and

@@ -18,6 +18,10 @@ import { reconcileSubscriptionFromStripe, mapStripeSubscriptionStatus } from "@/
 import { track } from "@/lib/analytics/track";
 import { logAutomationError } from "@/lib/monitoring/logError";
 
+// Verifies and reconciles against the Stripe API. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   if (!isLiveBillingEnabled()) {
     return NextResponse.json({ error: "Live billing is not configured." }, { status: 404 });

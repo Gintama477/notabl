@@ -4,7 +4,10 @@ import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { grantPilotAccess } from "@/lib/db/queries";
 import { createLoginToken } from "@/lib/auth/loginToken";
 import { sendPilotInviteEmail } from "@/lib/email/send";
-import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
+// Sends a real email (Resend), so an explicit budget rather than the
+// invisible 10-second default. See the maxDuration comment on
+// app/api/signup/route.ts for why that default is a trap.
+export const maxDuration = 30;
 import { track } from "@/lib/analytics/track";
 import { getSiteUrl } from "@/lib/siteUrl";
 
@@ -40,11 +43,12 @@ export async function POST(req: NextRequest) {
 
   if (!reused) {
     await track("business_added", { accountId: account.id, businessId: business.id });
-    try {
-      await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
-    } catch (err) {
-      console.error("Pilot initial analysis failed:", err);
-    }
+    // NO analysis pass here, same reason as app/api/signup/route.ts: this
+    // route also sends an email, and chaining a full analysis in front of
+    // it is what left signup hanging. The pilot practice's dashboard runs
+    // it on their first load (components/dashboard/FirstRunAnalysis.tsx),
+    // which is also better for them — progress they can watch, rather than
+    // work finished before they ever log in.
   }
 
   // Longer-lived than a regular self-requested login link (15m) — this one

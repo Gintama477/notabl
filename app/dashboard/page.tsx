@@ -32,6 +32,7 @@ import {
 import { NewThisWeek } from "@/components/dashboard/NewThisWeek";
 import { LowRatedReviewsCard } from "@/components/dashboard/LowRatedReviewsCard";
 import { RunAnalysisButton } from "@/components/dashboard/RunAnalysisButton";
+import { FirstRunAnalysis } from "@/components/dashboard/FirstRunAnalysis";
 import { track } from "@/lib/analytics/track";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
 import { formatLastUpdated } from "@/lib/reports/formatLastUpdated";
@@ -259,11 +260,22 @@ export default async function DashboardPage() {
               )}
 
               {!data.latestReport ? (
-                <div className="mt-10 rounded-lg border border-slate-200 bg-white p-8 text-center">
-                  <p className="text-slate-600">
-                    No analysis has run yet for this business. Click &ldquo;Run Analysis Now&rdquo; above to generate your first report.
-                  </p>
-                </div>
+                // Reviews but no report yet — the normal state right after
+                // signup, now that signup itself no longer runs the
+                // analysis inside its own request (see the maxDuration
+                // comment on app/api/signup/route.ts). This starts it
+                // automatically so the customer still never has to click
+                // anything. With no reviews at all there's nothing to
+                // analyze, so it stays a plain message.
+                data.totalReviews > 0 ? (
+                  <FirstRunAnalysis />
+                ) : (
+                  <div className="mt-10 rounded-lg border border-slate-200 bg-white p-8 text-center">
+                    <p className="text-slate-600">
+                      No reviews to analyze yet. Connect your Google reviews above to get your first report.
+                    </p>
+                  </div>
+                )
               ) : (
                 <>
                   {/* items-start, not the default stretch: a good practice's

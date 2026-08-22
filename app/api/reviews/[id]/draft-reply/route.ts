@@ -4,6 +4,10 @@ import { getBusinessForAccount, getReviewById, getReviewReply, saveReviewReply }
 import { draftReviewReply, DraftReplyFailedError } from "@/lib/ai/draftReply";
 import { checkRateLimit } from "@/lib/rateLimit";
 
+// Calls the AI provider to draft a reply. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 // Generates a reply draft ON DEMAND — never on ingest, per the cost
 // constraint this feature was built under (a Claude call should only ever
 // happen when a human is actually about to read the output). Cached in

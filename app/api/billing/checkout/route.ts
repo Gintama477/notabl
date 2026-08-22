@@ -10,6 +10,11 @@ import { getBillingProvider } from "@/lib/billing/provider";
 import { track } from "@/lib/analytics/track";
 import { getSiteUrl } from "@/lib/siteUrl";
 
+// Creates a Stripe Checkout session. A missing maxDuration is a silent 10s
+// limit, not "no limit" — see app/api/signup/route.ts for the bug that
+// trap caused.
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   const accountId = await getSessionAccountId();
   if (!accountId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });

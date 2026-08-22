@@ -5,6 +5,10 @@ import { isLiveBillingEnabled } from "@/lib/billing/provider";
 import { StripeBillingProvider } from "@/lib/billing/stripeProvider";
 import { reconcileSubscriptionFromStripe } from "@/lib/billing/reconcile";
 
+// Reads subscription state back from Stripe. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 /**
  * "Resync with Stripe" — the self-heal path for a subscription row stuck
  * with a real status (trialing/active/...) but no stripeCustomerId, e.g.

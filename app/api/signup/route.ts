@@ -4,11 +4,24 @@ import { createAccountWithDemoBusiness, findDuplicateBusiness } from "@/lib/db/q
 import { createSession } from "@/lib/auth/session";
 import { sendMagicLoginLink, DEMO_LINK_COOKIE } from "@/lib/auth/sendMagicLink";
 import { track } from "@/lib/analytics/track";
-import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { sendWelcomeEmail } from "@/lib/email/send";
 import { logAutomationError } from "@/lib/monitoring/logError";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { getSiteUrl } from "@/lib/siteUrl";
+
+// A MISSING maxDuration IS NOT "no limit" — it is a silent 10-second one,
+// which is the trap that broke this route. It used to run a full
+// runAnalysisForBusiness pass inside those 10 seconds; once real Claude
+// was configured that alone blew past them, so Vercel killed the function
+// and the signup form sat on "Setting up your dashboard…" forever. The
+// account, business, demo reviews and welcome email were all created —
+// they happen before the analysis — so it failed in the most confusing
+// possible way: everything worked except the response.
+//
+// Same defect as the analysis runs (75fe802) and the connect routes
+// (a3b9c33). The rule those established applies here: one request does
+// one expensive thing. 30s is ample for account creation plus one email.
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   // 5 signups per 30 minutes per IP — generous for a real user (who signs up
@@ -106,24 +119,12 @@ export async function POST(req: NextRequest) {
       console.error("Welcome email failed:", emailErr);
     }
 
-    // Run the analysis pipeline immediately so the dashboard is populated
-    // the moment the user lands on it — no manual "analyze" step required,
-    // per the core promise ("the customer should NOT need to do any manual
-    // analysis"). Cheap here because the DemoProvider makes no external
-    // API calls; with a live Claude key this still runs once per signup.
-    try {
-      const result = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
-      await track("analysis_completed", {
-        accountId: account.id,
-        businessId: business.id,
-        properties: { reviewsAnalyzed: result.reviewsNewlyAnalyzed },
-      });
-    } catch (analysisErr) {
-      // Signup should still succeed even if analysis fails — the dashboard
-      // will show an empty/error state and a retry button.
-      console.error("Initial analysis failed:", analysisErr);
-    }
-
+    // NO analysis pass here — see the maxDuration comment above. The
+    // dashboard starts it on first load instead
+    // (components/dashboard/FirstRunAnalysis.tsx), which gives the new
+    // customer visible progress and a time estimate rather than a signup
+    // form frozen on "Setting up your dashboard…". The core promise still
+    // holds: they never click anything to make analysis happen.
     return NextResponse.json({ ok: true, businessId: business.id, possibleDuplicate: Boolean(possibleDuplicate) });
   } catch (err) {
     console.error("Signup failed:", err);

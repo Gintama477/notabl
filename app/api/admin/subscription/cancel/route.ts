@@ -6,6 +6,10 @@ import { isLiveBillingEnabled } from "@/lib/billing/provider";
 import { StripeBillingProvider } from "@/lib/billing/stripeProvider";
 import { track } from "@/lib/analytics/track";
 
+// Cancels a subscription through Stripe. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 const CancelSchema = z.object({ accountId: z.string().min(1) });
 
 /**

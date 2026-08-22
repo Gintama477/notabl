@@ -5,6 +5,10 @@ import { sendMagicLoginLink, DEMO_LINK_COOKIE } from "@/lib/auth/sendMagicLink";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getSiteUrl } from "@/lib/siteUrl";
 
+// Sends a magic-link email via Resend. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 const LoginSchema = z.object({ email: z.string().email() });
 
 // Sends a magic login link instead of logging the visitor straight in — see

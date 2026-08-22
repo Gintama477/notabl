@@ -4,6 +4,10 @@ import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { deleteBusinessAndAllData, BusinessDeletionRefusedError } from "@/lib/db/queries";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
+// Deletes across a dozen tables in one transaction. A missing maxDuration is a silent 10s limit, not "no limit" —
+// see app/api/signup/route.ts for the bug that trap caused.
+export const maxDuration = 30;
+
 const DeleteSchema = z.object({
   businessId: z.string().min(1),
   // Must equal the business name exactly. Re-verified inside
