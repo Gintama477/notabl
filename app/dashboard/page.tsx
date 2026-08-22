@@ -82,6 +82,12 @@ export default async function DashboardPage() {
   const topPositiveThemes = data.latestReport ? JSON.parse(data.latestReport.topPositiveThemesJson) : [];
   const topNegativeThemes = data.latestReport ? JSON.parse(data.latestReport.topNegativeThemesJson) : [];
   const recommendedActions = data.latestReport ? JSON.parse(data.latestReport.recommendedActionsJson) : [];
+  // Written by the model per practice (see the "opportunities" block in
+  // lib/ai/prompts/generateNarrative.ts). The ?? "[]" covers reports stored
+  // before this column existed — the DB default backfilled them, but a
+  // narrative generated under narrative-v5 still has an empty list, which
+  // renders the honest empty state rather than stale boilerplate.
+  const opportunities = data.latestReport ? JSON.parse(data.latestReport.opportunitiesJson ?? "[]") : [];
 
   // What the right-hand column shows, in strict priority order:
   //   1. genuinely negative theme mentions -> "What Patients Dislike"
@@ -306,7 +312,7 @@ export default async function DashboardPage() {
                   </div>
 
                   <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
-                    <Opportunities rollups={data.rollups} excerptsByTheme={excerptsByTheme} />
+                    <Opportunities items={opportunities} excerptsByTheme={excerptsByTheme} />
                     <RecommendedActions items={recommendedActions} />
                   </div>
                 </>

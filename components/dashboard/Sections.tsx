@@ -134,23 +134,31 @@ export function IssuesGettingWorse({ rollups, excerptsByTheme }: { rollups: Roll
   );
 }
 
-export function Opportunities({ rollups, excerptsByTheme }: { rollups: Rollup[]; excerptsByTheme?: ExcerptsByTheme }) {
-  const positiveSorted = rollups
-    .filter((r) => r.positiveCount > r.negativeCount && r.positiveCount > 0)
-    .sort((a, b) => b.positiveCount - a.positiveCount);
-  // Frame the 3rd+ strongest positive themes as under-leveraged marketing
-  // opportunities — the top 2 already show in "What Patients Love".
-  const opportunities = positiveSorted.slice(2, 5);
+// Takes stored, AI-written items (like RecommendedActions), NOT rollups it
+// summarizes itself. This used to derive the 3rd-through-5th strongest
+// positive themes and write its own sentence — which meant every practice,
+// forever, read the identical "consider highlighting this in your
+// marketing or patient communications", three times on one page, with only
+// the theme name and a number changing. That product intent (surface the
+// strengths the headline section didn't cover) is preserved, just moved
+// into the prompt, where the model is told not to repeat a category it
+// already put in topPositiveThemes — see lib/ai/prompts/generateNarrative.ts.
+export function Opportunities({ items, excerptsByTheme }: { items: ThemeRef[]; excerptsByTheme?: ExcerptsByTheme }) {
   return (
-    <SectionCard title="Opportunities" accent="text-teal-800" empty={opportunities.length === 0}>
-      {opportunities.map((r) => (
-        <div key={r.themeCategory} className="border-l-2 border-teal-600 pl-3">
-          <p className="text-sm font-medium text-slate-800">{THEME_LABELS[r.themeCategory as ThemeCategory]}</p>
-          <p className="text-sm text-slate-600">
-            Praised in {r.positiveCount} review{r.positiveCount === 1 ? "" : "s"} overall — consider
-            highlighting this in your marketing or patient communications.
-          </p>
-          <QuoteList quotes={excerptsByTheme?.[r.themeCategory]?.positive} />
+    <SectionCard
+      title="Opportunities"
+      accent="text-teal-800"
+      empty={items.length === 0}
+      // An honest empty state: a practice with only one or two themes has
+      // no under-used strength to surface, and the model returning none is
+      // the correct answer rather than a gap to pad.
+      emptyMessage="Nothing under-used to flag — your strongest themes are already covered above."
+    >
+      {items.map((t) => (
+        <div key={t.category} className="border-l-2 border-teal-600 pl-3">
+          <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>
+          <p className="text-sm text-slate-600">{t.summary}</p>
+          <QuoteList quotes={excerptsByTheme?.[t.category]?.positive} />
         </div>
       ))}
     </SectionCard>

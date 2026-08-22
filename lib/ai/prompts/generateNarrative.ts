@@ -27,7 +27,14 @@
 // weeklyReports.narrativeVersion records it per report, and the
 // cost-control reuse check in lib/analysis/runAnalysis.ts compares against
 // it so a wording change actually takes effect instead of being skipped.
-export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v5";
+// v6: "opportunities" is now written by the model instead of being a
+// hardcoded sentence in the dashboard component. Every practice used to
+// see the identical string ("...consider highlighting this in your
+// marketing or patient communications") with only the theme name and count
+// swapped — advice that applies to any strength at any business, repeated
+// three times on one page. It was the one genuinely boilerplate section on
+// an otherwise personalized dashboard.
+export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v6";
 
 export function buildNarrativePrompt(structuredRollupJson: string, businessName: string): string {
   return `You are writing a patient-review report for a dental practice
@@ -106,12 +113,38 @@ GOOD example (specific, tied to the data): "Phone-response complaints
 increased from 3 mentions to 8 mentions since your last report. Review
 front-desk call handling and missed-call procedures."
 
+"opportunities" are the practice's UNDER-USED strengths: genuine
+strengths in the data that you did NOT already place in
+"topPositiveThemes". Never repeat a category between those two lists —
+"topPositiveThemes" is where the headline strengths go, and this section
+exists to surface the ones a busy owner would otherwise overlook. Include
+at most 3, and include none at all if every real strength is already
+covered above; an empty list is correct and expected for a practice with
+only one or two themes.
+
+For each, write one or two sentences saying something specific about how
+THIS strength could be put to work, grounded in that theme's actual counts.
+The reader is paying for this — it must be something they could not have
+written themselves about their own practice. Generic marketing advice that
+would fit any business is a failure, even if it is technically true.
+Operational suggestions only, same as "recommendedActions": how the
+practice communicates, schedules, or presents itself — never anything
+clinical.
+
+BAD example (generic filler, do not write like this): "Praised in 34
+reviews overall — consider highlighting this in your marketing."
+GOOD example (specific, tied to the data): "Staff friendliness has 34
+positive mentions and zero negatives — the most consistent strength in the
+data. Worth naming specific team members in appointment reminders, since
+patients already single them out by name."
+
 Respond with ONLY valid JSON matching this shape, no other text:
 {
   "executiveSummary": "3-5 sentences",
   "topPositiveThemes": [ { "category": "...", "summary": "..." } ],
   "topNegativeThemes": [ { "category": "...", "summary": "..." } ],
   "emergingIssues": [ { "category": "...", "summary": "..." } ],
+  "opportunities": [ { "category": "...", "summary": "..." } ],
   "changesFromLastPeriod": [ "short factual statement", "..." ],
   "recommendedActions": [ { "title": "...", "detail": "..." } ]
 }`;

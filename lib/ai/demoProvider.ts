@@ -172,10 +172,10 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
 
   const { THEME_LABELS } = await import("@/config/themes");
 
-  const positiveThemes = rollup.themes
+  const positiveSorted = rollup.themes
     .filter((t) => t.positiveCount > t.negativeCount && t.positiveCount > 0)
-    .sort((a, b) => b.positiveCount - a.positiveCount)
-    .slice(0, 4);
+    .sort((a, b) => b.positiveCount - a.positiveCount);
+  const positiveThemes = positiveSorted.slice(0, 4);
 
   const negativeThemes = rollup.themes
     .filter((t) => t.negativeCount > 0 && t.negativeCount >= t.positiveCount)
@@ -209,6 +209,23 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
   const topPositiveThemes = positiveThemes.map((t) => ({
     category: t.category,
     summary: `${THEME_LABELS[t.category]} continues to receive positive mentions (${t.positiveCount} total).`,
+  }));
+
+  // Strictly the positives BEYOND the ones topPositiveThemes takes, so the
+  // two lists can never overlap. Sliced from positiveSorted at exactly the
+  // index topPositiveThemes stops at — not a hardcoded 2, which is the bug
+  // the previous component version shipped with: it sliced from index 2 on
+  // the assumption that "the top 2 already show in What Patients Love",
+  // while topPositiveThemes actually takes four. Opportunities therefore
+  // repeated the 3rd and 4th strongest themes verbatim from the card
+  // beside it. The live provider avoids this by being instructed not to
+  // repeat a category (lib/ai/prompts/generateNarrative.ts); this stays
+  // templated on purpose — fallback output for demo data, never what a
+  // paying account sees — but returns the identical shape so the two paths
+  // can't diverge structurally.
+  const opportunities = positiveSorted.slice(positiveThemes.length, positiveThemes.length + 3).map((t) => ({
+    category: t.category,
+    summary: `${THEME_LABELS[t.category]} has ${t.positiveCount} positive mention${t.positiveCount === 1 ? "" : "s"} overall but isn't among the top strengths — an under-used angle worth drawing attention to.`,
   }));
 
   const topNegativeThemes = negativeThemes.map((t) => ({
@@ -267,6 +284,7 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     topPositiveThemes,
     topNegativeThemes,
     emergingIssues,
+    opportunities,
     changesFromLastPeriod,
     recommendedActions: recommendedActions.length > 0 ? recommendedActions : [
       { title: "Keep up current practices", detail: "No significant negative trends were detected. Continue current operations." },

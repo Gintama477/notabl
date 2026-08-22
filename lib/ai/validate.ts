@@ -60,6 +60,10 @@ export const WeeklyNarrativeSchema = z.object({
   topPositiveThemes: z.array(NarrativeThemeRefSchema).max(5),
   topNegativeThemes: z.array(NarrativeThemeRefSchema).max(5),
   emergingIssues: z.array(NarrativeThemeRefSchema).max(5),
+  // Defaulted rather than required: a narrative generated under an older
+  // prompt version (narrative-v5 and earlier) has no such field, and those
+  // stored reports must still parse rather than throwing when re-read.
+  opportunities: z.array(NarrativeThemeRefSchema).max(3).default([]),
   changesFromLastPeriod: z.array(z.string().max(300)).max(6),
   recommendedActions: z.array(NarrativeActionSchema).max(5),
 });
@@ -81,6 +85,10 @@ export function narrativeReferencesOnlyKnownThemes(
     ...narrative.topPositiveThemes,
     ...narrative.topNegativeThemes,
     ...narrative.emergingIssues,
+    // Included for the same reason as the others: opportunities cite real
+    // counts for a real category, so a fabricated category here would put
+    // an invented strength on the dashboard.
+    ...narrative.opportunities,
   ];
   return refs.every((r) => knownCategories.has(r.category));
 }

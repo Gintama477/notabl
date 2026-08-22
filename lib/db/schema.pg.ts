@@ -259,6 +259,12 @@ export const weeklyReports = pgTable("weekly_reports", {
   topPositiveThemesJson: text("top_positive_themes_json").notNull(),
   topNegativeThemesJson: text("top_negative_themes_json").notNull(),
   emergingIssuesJson: text("emerging_issues_json").notNull(),
+  // Under-used strengths, AI-written per practice (see the "opportunities"
+  // block in lib/ai/prompts/generateNarrative.ts). Defaults to '[]' so
+  // reports generated before this column existed — and any practice whose
+  // strengths are all already covered in topPositiveThemes — read back as
+  // an empty list rather than null.
+  opportunitiesJson: text("opportunities_json").notNull().default("[]"),
   changesFromLastPeriodJson: text("changes_from_last_period_json").notNull(),
   recommendedActionsJson: text("recommended_actions_json").notNull(),
   status: text("status").notNull().default("draft"),

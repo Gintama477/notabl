@@ -464,6 +464,7 @@ export async function runAnalysisForBusiness(
         topPositiveThemesJson: JSON.stringify(narrative.topPositiveThemes),
         topNegativeThemesJson: JSON.stringify(narrative.topNegativeThemes),
         emergingIssuesJson: JSON.stringify(narrative.emergingIssues),
+        opportunitiesJson: JSON.stringify(narrative.opportunities),
         changesFromLastPeriodJson: JSON.stringify(narrative.changesFromLastPeriod),
         recommendedActionsJson: JSON.stringify(narrative.recommendedActions),
         // Stamps the wording rules this text was written under, so the
