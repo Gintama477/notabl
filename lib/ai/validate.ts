@@ -3,7 +3,7 @@
 // information" and "generate structured JSON before natural language."
 
 import { z } from "zod";
-import { THEME_CATEGORIES, SENTIMENTS, SEVERITIES } from "@/config/themes";
+import { THEME_CATEGORIES, SENTIMENTS, SEVERITIES, ThemeCategory } from "@/config/themes";
 
 export const ThemeMentionSchema = z.object({
   category: z.enum(THEME_CATEGORIES),
@@ -91,6 +91,49 @@ export function narrativeReferencesOnlyKnownThemes(
     ...narrative.opportunities,
   ];
   return refs.every((r) => knownCategories.has(r.category));
+}
+
+/**
+ * Forces the narrative to match the theme selection made in code
+ * (lib/ai/selectNarrativeThemes.ts): every selected category gets exactly
+ * one entry, in the selected order, and anything the model added outside
+ * the selection is dropped.
+ *
+ * This is the guard that makes "code picks, model writes" actually hold.
+ * Instructing the model isn't enough on its own — it returned a
+ * completely empty opportunities array for a practice with three
+ * spotless themes, and a section that silently says "nothing to flag"
+ * when the data plainly has something is worse than boilerplate. When the
+ * model skips a theme, its own plain sentence is substituted rather than
+ * the theme disappearing.
+ */
+export function reconcileNarrativeSelection(
+  narrative: WeeklyNarrative,
+  selection: {
+    topPositiveThemes: string[];
+    topNegativeThemes: string[];
+    emergingIssues: string[];
+    opportunities: string[];
+  },
+  fallbackSummary: (category: string, section: keyof WeeklyNarrative & string) => string
+): WeeklyNarrative {
+  const align = (
+    section: "topPositiveThemes" | "topNegativeThemes" | "emergingIssues" | "opportunities"
+  ): { category: ThemeCategory; summary: string }[] => {
+    const written = new Map(narrative[section].map((entry) => [entry.category as string, entry.summary]));
+    return selection[section].map((category) => ({
+      category: category as ThemeCategory,
+      summary: written.get(category) ?? fallbackSummary(category, section),
+    }));
+  };
+
+  return {
+    ...narrative,
+    topPositiveThemes: align("topPositiveThemes"),
+    topNegativeThemes: align("topNegativeThemes"),
+    emergingIssues: align("emergingIssues"),
+    opportunities: align("opportunities"),
+  };
 }
 
 export const DraftReplySchema = z.object({ reply: z.string().min(1).max(600) });

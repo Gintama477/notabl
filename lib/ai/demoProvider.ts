@@ -168,33 +168,29 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
       pctChangeVsPrior: number | null;
     }[];
     totalReviews: number;
+    selection?: {
+      topPositiveThemes: string[];
+      topNegativeThemes: string[];
+      emergingIssues: string[];
+      opportunities: string[];
+    };
   };
 
   const { THEME_LABELS } = await import("@/config/themes");
 
-  const positiveSorted = rollup.themes
-    .filter((t) => t.positiveCount > t.negativeCount && t.positiveCount > 0)
-    .sort((a, b) => b.positiveCount - a.positiveCount);
-  const positiveThemes = positiveSorted.slice(0, 4);
+  // Selection comes from the SAME code path the live provider uses
+  // (lib/ai/selectNarrativeThemes.ts, passed in as rollup.selection), so
+  // the demo and live outputs can never pick different themes for the same
+  // data. This file only writes the sentences, exactly like the model does.
+  const byCategory = new Map(rollup.themes.map((t) => [t.category as string, t]));
+  const pick = (categories: string[]) =>
+    categories.map((c) => byCategory.get(c)).filter((t): t is (typeof rollup.themes)[number] => Boolean(t));
 
-  const negativeThemes = rollup.themes
-    .filter((t) => t.negativeCount > 0 && t.negativeCount >= t.positiveCount)
-    .sort((a, b) => b.negativeCount - a.negativeCount)
-    .slice(0, 4);
-
-  // trendDirection === "new" alone isn't enough — that's true of any theme
-  // with zero mentions one period ago, regardless of sentiment, and this
-  // list feeds "Emerging Issues" and "Recommended Actions" (both implicitly
-  // framed as problems to look into). Without the same negativeCount filter
-  // negativeThemes uses just above, a newly-appearing POSITIVE theme (e.g.
-  // overwhelming praise for professionalism that just started showing up)
-  // gets told to the owner as something to "investigate... before it
-  // becomes a pattern," which is backwards. A newly-emerging positive theme
-  // is still worth surfacing — it belongs in topPositiveThemes/Opportunities
-  // (computed separately above), never here.
-  const emerging = rollup.themes
-    .filter((t) => t.trendDirection === "new" && t.negativeCount > 0 && t.negativeCount >= t.positiveCount)
-    .slice(0, 5);
+  const selection = rollup.selection ?? { topPositiveThemes: [], topNegativeThemes: [], emergingIssues: [], opportunities: [] };
+  const positiveThemes = pick(selection.topPositiveThemes);
+  const negativeThemes = pick(selection.topNegativeThemes);
+  const emerging = pick(selection.emergingIssues);
+  const opportunityThemes = pick(selection.opportunities);
   const worsening = rollup.themes.filter((t) => t.trendDirection === "increasing" && t.negativeCount > 0);
 
   // "this period"/"this week" reads as a narrow, recent slice of time — but
@@ -211,19 +207,12 @@ export async function demoGenerateNarrative(structuredRollupJson: string, busine
     summary: `${THEME_LABELS[t.category]} continues to receive positive mentions (${t.positiveCount} total).`,
   }));
 
-  // Strictly the positives BEYOND the ones topPositiveThemes takes, so the
-  // two lists can never overlap. Sliced from positiveSorted at exactly the
-  // index topPositiveThemes stops at — not a hardcoded 2, which is the bug
-  // the previous component version shipped with: it sliced from index 2 on
-  // the assumption that "the top 2 already show in What Patients Love",
-  // while topPositiveThemes actually takes four. Opportunities therefore
-  // repeated the 3rd and 4th strongest themes verbatim from the card
-  // beside it. The live provider avoids this by being instructed not to
-  // repeat a category (lib/ai/prompts/generateNarrative.ts); this stays
-  // templated on purpose — fallback output for demo data, never what a
-  // paying account sees — but returns the identical shape so the two paths
-  // can't diverge structurally.
-  const opportunities = positiveSorted.slice(positiveThemes.length, positiveThemes.length + 3).map((t) => ({
+  // Non-overlap with topPositiveThemes is guaranteed upstream by
+  // selectNarrativeThemes, which slices opportunities from exactly where
+  // the headline list stops. This file no longer decides it — which is the
+  // whole point: demo and live now pick identical themes for identical
+  // data, and only the wording differs.
+  const opportunities = opportunityThemes.map((t) => ({
     category: t.category,
     summary: `${THEME_LABELS[t.category]} has ${t.positiveCount} positive mention${t.positiveCount === 1 ? "" : "s"} overall but isn't among the top strengths — an under-used angle worth drawing attention to.`,
   }));

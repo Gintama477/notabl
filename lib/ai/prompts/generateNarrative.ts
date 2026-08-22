@@ -34,7 +34,14 @@
 // swapped — advice that applies to any strength at any business, repeated
 // three times on one page. It was the one genuinely boilerplate section on
 // an otherwise personalized dashboard.
-export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v6";
+// v7: the model no longer chooses which themes appear in any section —
+// code does (lib/ai/selectNarrativeThemes.ts) and passes the choice in as
+// "selection". v6 asked it to decide which strengths were under-used, and
+// on a practice with three themes at zero negatives it returned an empty
+// opportunities array, so the card claimed there was nothing to flag.
+// Every section was exposed to the same silent under-reporting; an empty
+// topNegativeThemes would have hidden real complaints just as quietly.
+export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v7";
 
 export function buildNarrativePrompt(structuredRollupJson: string, businessName: string): string {
   return `You are writing a patient-review report for a dental practice
@@ -113,14 +120,20 @@ GOOD example (specific, tied to the data): "Phone-response complaints
 increased from 3 mentions to 8 mentions since your last report. Review
 front-desk call handling and missed-call procedures."
 
-"opportunities" are the practice's UNDER-USED strengths: genuine
-strengths in the data that you did NOT already place in
-"topPositiveThemes". Never repeat a category between those two lists —
-"topPositiveThemes" is where the headline strengths go, and this section
-exists to surface the ones a busy owner would otherwise overlook. Include
-at most 3, and include none at all if every real strength is already
-covered above; an empty list is correct and expected for a practice with
-only one or two themes.
+CRITICAL — YOU ARE NOT CHOOSING WHICH THEMES APPEAR. The "selection"
+object in the data above lists, for each of "topPositiveThemes",
+"topNegativeThemes", "emergingIssues" and "opportunities", exactly which
+theme categories belong in that section. Return exactly one entry for
+EVERY category listed there, in that order, and never add a category that
+isn't listed. If a selection list is empty, return an empty array for that
+section. Your job is the wording, not the picking — a section whose
+selection has three categories and whose output has fewer is wrong, even
+if what you wrote is accurate.
+
+"opportunities" are the practice's UNDER-USED strengths: real strengths
+that aren't among the headline ones in "topPositiveThemes". The selection
+has already excluded anything appearing there, so the two lists cannot
+overlap.
 
 For each, write one or two sentences saying something specific about how
 THIS strength could be put to work, grounded in that theme's actual counts.
