@@ -29,7 +29,6 @@ export function Footer() {
               <Link href="/legal/terms" className="hover:text-slate-800">Terms of Service</Link>
               <Link href="/legal/privacy" className="hover:text-slate-800">Privacy Policy</Link>
               <Link href="/legal/ai-disclaimer" className="hover:text-slate-800">AI Disclaimer</Link>
-              <Link href="/admin" className="hover:text-slate-800">Admin</Link>
             </nav>
           </div>
         </div>

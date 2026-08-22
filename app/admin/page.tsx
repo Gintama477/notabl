@@ -39,10 +39,6 @@ export default async function AdminPage({
           <button className="mt-3 w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white">
             Enter
           </button>
-          <p className="mt-3 text-xs text-slate-400">
-            Default dev key is <code>dev-admin</code>. Set ADMIN_SECRET in your environment for production.
-            Session lasts 12 hours.
-          </p>
         </form>
       </main>
     );

@@ -3,9 +3,19 @@ import { createAdminSession } from "@/lib/auth/adminSession";
 import { logAutomationError } from "@/lib/monitoring/logError";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
-function isCorrectKey(key: string | undefined) {
-  const expected = process.env.ADMIN_SECRET || "dev-admin";
-  return !!key && key === expected;
+// Fail closed: no ADMIN_SECRET configured means NO admin login succeeds —
+// never a fallback to a known, previously-published default (this used to
+// be "dev-admin" unconditionally, AND the login page printed that exact
+// string to every visitor, authenticated or not — a real incident, not a
+// hypothetical one, if ADMIN_SECRET was ever left unset in production).
+// Mirrors CRON_SECRET's fail-closed pattern in
+// app/api/cron/check-reviews/route.ts. The one exception is local
+// development, gated on NODE_ENV !== "production" (Vercel always sets it
+// to "production" in a real deploy) — never active there even if
+// ADMIN_SECRET is missing by mistake.
+function expectedAdminKey(): string | undefined {
+  if (process.env.ADMIN_SECRET) return process.env.ADMIN_SECRET;
+  return process.env.NODE_ENV !== "production" ? "dev-admin" : undefined;
 }
 
 // POST so the admin key travels in the request body, not the URL — avoids
@@ -17,6 +27,12 @@ function isCorrectKey(key: string | undefined) {
 // MRR, businesses, prospect contact info, support appeal messages) was a
 // plain string compare with unlimited attempts.
 export async function POST(req: NextRequest) {
+  const expected = expectedAdminKey();
+  if (!expected) {
+    console.error("ADMIN_SECRET is not set — refusing admin login.");
+    return NextResponse.json({ error: "Not configured" }, { status: 503 });
+  }
+
   const ip = getClientIp(req);
   const rateLimit = checkRateLimit(`admin-login:${ip}`, 10, 15 * 60 * 1000);
   if (!rateLimit.allowed) {
@@ -32,7 +48,7 @@ export async function POST(req: NextRequest) {
   const key = form.get("key")?.toString();
 
   const url = new URL("/admin", req.url);
-  if (!isCorrectKey(key)) {
+  if (!key || key !== expected) {
     // Wrong admin key — a genuine authentication failure worth surfacing to
     // whoever eventually gets in, as a lightweight signal of repeated
     // unauthorized access attempts. Never logs the attempted key itself.
