@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionAccountId } from "@/lib/auth/session";
 import { getBusinessForAccount, connectGoogleReviewSource, BusinessAlreadyClaimedError } from "@/lib/db/queries";
-import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
+import { countReviewsPendingAnalysis } from "@/lib/analysis/runAnalysis";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 // Self-serve, customer-facing equivalent of
@@ -11,14 +11,27 @@ import { checkRateLimit } from "@/lib/rateLimit";
 // derived from the logged-in account's own session via
 // getBusinessForAccount, never accepted from the client, so one account
 // can never connect reviews onto a business it doesn't own. Reuses the
-// exact same connectGoogleReviewSource + runAnalysisForBusiness pipeline
-// as the admin route rather than duplicating it. See
+// exact same connectGoogleReviewSource import path as the admin route
+// rather than duplicating it. See
 // components/dashboard/ConnectReviewsCard.tsx for the UI that calls this.
 const ConnectSchema = z.object({ placeId: z.string().min(1) });
 
-// This route runs a full runAnalysisForBusiness pass immediately after
-// connecting — see the maxDuration comment on app/api/analysis/run/route.ts
-// for why 60s.
+// INVARIANT: a single request must never chain an external provider call
+// and an analysis pass. That is exactly what broke here — this route used
+// to call connectGoogleReviewSource (a live Outscraper fetch, 20-40+
+// seconds, and now up to 500 reviews rather than 200) and then
+// runAnalysisForBusiness (budgeted at EXTRACTION_BUDGET_MS = 30s plus
+// rollup and DB writes) inside one function. Together they exceed the 60s
+// ceiling, so Vercel killed the request mid-flight and NOTHING was
+// imported — the kill lands before the work commits, and the customer saw
+// only a generic "Connection failed."
+//
+// The analysis-run fix (75fe802) tuned the budgets INSIDE
+// runAnalysisForBusiness; it could not account for a caller stacking a
+// 40-second provider call in front of it. Raising maxDuration is not an
+// option either — 60s is Vercel Hobby's hard ceiling, so there is no
+// headroom to buy. The only fix is doing less per request: this route now
+// imports and returns, and the client drives analysis separately.
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
@@ -53,28 +66,21 @@ export async function POST(req: NextRequest) {
   try {
     const result = await connectGoogleReviewSource(business.id, business.name, parsed.data.placeId);
 
-    // One 45s-budgeted pass (see EXTRACTION_BUDGET_MS in
-    // lib/analysis/runAnalysis.ts) — a large business's first real analysis
-    // won't finish in a single call. reviewsRemaining and
-    // reviewsNewlyAnalyzed are both surfaced so the caller
-    // (components/dashboard/ConnectReviewsCard.tsx) can keep calling
-    // /api/analysis/run itself to finish the rest, showing one continuous
-    // progress state rather than leaving a customer to notice and click a
-    // separate button. This route itself doesn't loop, since re-running it
-    // would mean re-hitting connectGoogleReviewSource (a real Outscraper
-    // call with its own cooldown), not just re-analyzing.
-    let reviewsRemaining = 0;
-    let reviewsNewlyAnalyzed = 0;
-    try {
-      const analysisResult = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
-      reviewsRemaining = analysisResult.reviewsRemaining;
-      reviewsNewlyAnalyzed = analysisResult.reviewsNewlyAnalyzed;
-    } catch (analysisErr) {
-      console.error("Post-connect analysis failed:", analysisErr);
-      // Connection itself still succeeded — surface that, don't fail the whole request.
-    }
+    // Import only — deliberately NO analysis pass here. reviewsRemaining is
+    // what's WAITING to be analyzed (counted with the same rule the
+    // extraction loop uses, see countReviewsPendingAnalysis), not what this
+    // request analyzed, which is always zero now.
+    //
+    // components/dashboard/ConnectReviewsCard.tsx already loops on this
+    // number by calling /api/analysis/run in properly-budgeted rounds with
+    // progress and a time estimate, so the customer still sees one
+    // continuous experience — it's just split across requests that each fit
+    // inside their own budget.
+    const reviewsRemaining = await countReviewsPendingAnalysis(business.id);
 
-    return NextResponse.json({ ok: true, ...result, reviewsRemaining, reviewsNewlyAnalyzed });
+    // reviewsNewlyAnalyzed stays in the response, always 0, because the
+    // client reads it as the starting count for its progress display.
+    return NextResponse.json({ ok: true, ...result, reviewsRemaining, reviewsNewlyAnalyzed: 0 });
   } catch (err) {
     if (err instanceof BusinessAlreadyClaimedError) {
       // Expected, not a server error — the UI (ConnectReviewsCard) checks

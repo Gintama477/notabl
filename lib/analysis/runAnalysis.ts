@@ -83,6 +83,36 @@ const FINAL_ROUND_EXTRACTION_BUDGET_MS = 20_000;
 // needed. See also the matching red warning in /admin.
 const STALE_RUN_MS = 10 * 60 * 1000;
 
+/**
+ * The single definition of "this review still needs analysis": never
+ * analyzed, or analyzed by a different provider/prompt version (including
+ * null on pre-tracking rows, which are stale by construction). Exported so
+ * the connect routes can report what's waiting using the exact same rule
+ * the extraction loop applies, rather than a second copy that could drift.
+ */
+export function isReviewPendingAnalysis(
+  review: { analyzedAt: string | null; analyzedWith: string | null },
+  currentVersion: string
+): boolean {
+  return !(review.analyzedAt && review.analyzedWith === currentVersion);
+}
+
+/**
+ * How many of a business's reviews are waiting to be analyzed at the
+ * currently-active provider version. Used by the connect routes to report
+ * reviewsRemaining WITHOUT running an analysis pass themselves — see the
+ * "never chain a provider call and an analysis pass" note on those routes.
+ */
+export async function countReviewsPendingAnalysis(businessId: string): Promise<number> {
+  const provider = getAIProvider();
+  const currentVersion = `${provider.name}/${provider.promptVersion}`;
+  const rows = await db
+    .select({ analyzedAt: reviews.analyzedAt, analyzedWith: reviews.analyzedWith })
+    .from(reviews)
+    .where(eq(reviews.businessId, businessId));
+  return rows.filter((r) => isReviewPendingAnalysis(r, currentVersion)).length;
+}
+
 export async function runAnalysisForBusiness(
   businessId: string,
   businessName: string,
@@ -164,7 +194,7 @@ export async function runAnalysisForBusiness(
     // is treated the same as never-analyzed, so switching from
     // DemoProvider to real Claude re-analyzes everything automatically,
     // and a future prompt-version bump does the same.
-    const staleReviews = allBusinessReviews.filter((r) => !(r.analyzedAt && r.analyzedWith === currentVersion));
+    const staleReviews = allBusinessReviews.filter((r) => isReviewPendingAnalysis(r, currentVersion));
 
     let newlyAnalyzed = 0;
     // Two distinct reasons a review can still need work after this loop,

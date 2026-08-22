@@ -57,11 +57,6 @@ export function ConnectReviewsCard() {
     e.preventDefault();
     setSubmitting(true);
     setResult(null);
-    // Timing starts here, not inside the round loop below — the initial
-    // connect-google request below does real extraction work synchronously
-    // (see its own ~45s-budgeted first pass) and its latency is real
-    // elapsed time that belongs in the throughput measurement.
-    start();
     setClaimedByOther(false);
 
     try {
@@ -95,11 +90,17 @@ export function ConnectReviewsCard() {
       }
 
       const importedMessage = `Connected — imported ${data.imported} review${data.imported === 1 ? "" : "s"}.`;
-      let totalAnalyzed = data.reviewsNewlyAnalyzed ?? 0;
+      let totalAnalyzed = data.reviewsNewlyAnalyzed ?? 0; // always 0 — connect imports only
       let remaining = data.reviewsRemaining ?? 0;
-      // Round 1 — the connect call above already ran its own first
-      // ~45s-budgeted analysis pass, so this is real progress with a real
-      // elapsed time behind it, not a zero starting point.
+
+      // Timing starts HERE, after the import, not before it. The connect
+      // request above is a 20-40s Outscraper fetch that analyzes nothing,
+      // so folding its latency into the throughput measurement would make
+      // the first estimate roughly twice the real remaining time. What's
+      // being extrapolated is analysis speed, so only analysis time counts.
+      start();
+      // Shows "0 of N" immediately rather than a bare spinner. No estimate
+      // yet — nothing has been analyzed to measure a rate from.
       recordRound(totalAnalyzed, remaining);
 
       for (let round = 0; remaining > 0 && round < MAX_ANALYSIS_ROUNDS; round++) {

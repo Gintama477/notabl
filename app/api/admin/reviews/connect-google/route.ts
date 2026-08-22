@@ -5,23 +5,24 @@ import { connectGoogleReviewSource } from "@/lib/db/queries";
 import { db } from "@/lib/db/client";
 import { businesses } from "@/lib/db/schema.pg";
 import { eq } from "drizzle-orm";
-import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
+import { countReviewsPendingAnalysis } from "@/lib/analysis/runAnalysis";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 // Admin-only, one practice at a time — same pattern as
 // app/api/admin/pilot/invite. Connects (or re-syncs) a business's real
 // Google reviews via the temporary Outscraper-backed provider (see
-// docs/REVIEW-DATA-PROVIDERS.md) and immediately re-runs analysis so the
-// practice's dashboard reflects the real data right away, same as a normal
-// signup does with demo data.
+// docs/REVIEW-DATA-PROVIDERS.md). Analysis is NOT run here — see the
+// invariant below; the admin form loops on reviewsRemaining instead.
 const ConnectSchema = z.object({
   businessId: z.string().min(1),
   placeId: z.string().min(1),
 });
 
-// This route runs a full runAnalysisForBusiness pass immediately after
-// connecting — see the maxDuration comment on app/api/analysis/run/route.ts
-// for why 60s.
+// INVARIANT: a single request must never chain an external provider call
+// and an analysis pass — see the full explanation on the self-serve route,
+// app/api/reviews/connect-google/route.ts. This route imports and returns;
+// ConnectGoogleReviewsForm drives analysis separately. 60s is Vercel
+// Hobby's hard ceiling, so there is no headroom to buy by raising it.
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
@@ -58,23 +59,14 @@ export async function POST(req: NextRequest) {
   try {
     const result = await connectGoogleReviewSource(business.id, business.name, parsed.data.placeId);
 
-    // One 45s-budgeted pass (see EXTRACTION_BUDGET_MS in
-    // lib/analysis/runAnalysis.ts) — a large business's first real analysis
-    // won't finish in a single call. reviewsRemaining is surfaced so
-    // ConnectGoogleReviewsForm (components/admin/PilotManagement.tsx) can
-    // keep going via /api/admin/analysis/run, which just re-analyzes
-    // without re-hitting connectGoogleReviewSource (a real Outscraper call
-    // with its own cooldown).
-    let reviewsRemaining = 0;
-    try {
-      const analysisResult = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString());
-      reviewsRemaining = analysisResult.reviewsRemaining;
-    } catch (analysisErr) {
-      console.error("Post-connect analysis failed:", analysisErr);
-      // Connection itself still succeeded — surface that, don't fail the whole request.
-    }
+    // Import only — no analysis pass here, same invariant as the
+    // self-serve route. reviewsRemaining is what's waiting, counted with
+    // the same rule the extraction loop uses; ConnectGoogleReviewsForm
+    // (components/admin/PilotManagement.tsx) already loops on it via
+    // /api/admin/analysis/run.
+    const reviewsRemaining = await countReviewsPendingAnalysis(business.id);
 
-    return NextResponse.json({ ok: true, ...result, reviewsRemaining });
+    return NextResponse.json({ ok: true, ...result, reviewsRemaining, reviewsNewlyAnalyzed: 0 });
   } catch (err) {
     console.error("connectGoogleReviewSource failed:", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Connection failed." }, { status: 500 });
