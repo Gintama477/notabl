@@ -55,12 +55,26 @@ export function useAnalysisProgress() {
   const recordRound = useCallback((analyzed: number, remaining: number) => {
     roundRef.current += 1;
 
-    // One data point (round 1) is noisy — its elapsed time includes
-    // whatever one-time request/connection overhead that first call had,
-    // not yet a stable per-review rate. Show the plain count only until
-    // round 2, per the "don't show an estimate after the first round" rule.
+    // Estimate from the FIRST completed round onward.
+    //
+    // This deliberately started at round 2, on the reasoning that one data
+    // point is too noisy to extrapolate from. Measured in production, that
+    // reasoning was wrong twice over. A "data point" is not one review: a
+    // round is a full wall-clock budget window, so round 1 measures 40-odd
+    // reviews and yields a perfectly stable per-review rate. And once
+    // intermediate rounds stopped generating throwaway narratives
+    // (lib/analysis/runAnalysis.ts), a 200-review backlog drains in 2-3
+    // rounds instead of 5+ — so "from round 2" meant the estimate appeared
+    // on the round that finishes the work, where remaining hits 0, progress
+    // clears, and it renders never. Faster analysis made the estimate
+    // permanently invisible.
+    //
+    // A first-round estimate skewing high is safe and self-correcting: the
+    // ConnectReviewsCard path includes its one-time Google import in that
+    // elapsed time, which can only make the first estimate pessimistic, and
+    // the never-increase rule below lets later rounds revise it downward.
     let estimateLabel: string | null = null;
-    if (roundRef.current >= 2 && startedAtRef.current !== null && analyzed > 0 && remaining > 0) {
+    if (roundRef.current >= 1 && startedAtRef.current !== null && analyzed > 0 && remaining > 0) {
       const elapsedSeconds = (Date.now() - startedAtRef.current) / 1000;
       const secondsPerReview = elapsedSeconds / analyzed;
       const rawEstimateSeconds = secondsPerReview * remaining;
