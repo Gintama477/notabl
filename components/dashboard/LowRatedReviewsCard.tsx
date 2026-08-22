@@ -20,15 +20,18 @@ function fmtDate(iso: string) {
 }
 
 // The single thing a practice owner most wants to see, surfaced directly
-// instead of requiring a trip to All Reviews + a rating filter. Deliberately
-// always meaningful, unlike the theme cards beside it: even an excellent,
-// 4.8-star practice has a handful of 1-2 star reviews (getDashboardData's
-// own definition of "negative" — see MetricsRow's negativePct), and it's
-// those SPECIFIC reviews — full text, not a theme summary — that a
-// good-but-imperfect practice owner actually wants to read and respond to.
-// This is deliberately the highest-value addition on a sparse "What
-// Patients Dislike" column: real content the theme cards can't provide,
-// not a rephrasing of the same summary.
+// instead of requiring a trip to All Reviews + a rating filter. Shown in
+// the right-hand dashboard column only when there are NO genuinely
+// negative theme mentions to show there instead — see the priority order
+// in app/dashboard/page.tsx. For a high-rated practice these specific
+// reviews, in full, are the real actionable content; a theme summary of
+// near-nothing is not.
+//
+// If there are none of these either, the card says exactly that in one
+// clean line and renders nothing else. An honest short card beats a padded
+// one, and it beats manufacturing a "weakness" out of praise (see the
+// comment on WhatPatientsDislike in Sections.tsx for the version of this
+// section that got that wrong).
 //
 // A client component (like NewThisWeek.tsx) purely for the expand/collapse
 // state below — reuses the exact same review-card markup and
@@ -36,9 +39,11 @@ function fmtDate(iso: string) {
 export function LowRatedReviewsCard({
   reviews,
   googleReviewsUrl,
+  totalReviews,
 }: {
   reviews: LowRatedReview[];
   googleReviewsUrl: string | null;
+  totalReviews: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? reviews : reviews.slice(0, COLLAPSED_LIMIT);
@@ -49,10 +54,11 @@ export function LowRatedReviewsCard({
       title="Reviews Worth Your Attention"
       accent="text-slate-900"
       empty={reviews.length === 0}
-      // Genuinely good news, stated plainly — not filler. A practice with
-      // zero low-rated reviews has nothing to act on, and the message
-      // should say exactly that instead of a generic "nothing to report."
-      emptyMessage="No reviews rated 1–2 stars. Nothing needs a response right now."
+      // Genuinely good news, stated plainly with the real number in it —
+      // not filler, and not a vague phrase. Reached only when there are
+      // also no negative themes (see app/dashboard/page.tsx), so it can
+      // honestly claim both at once.
+      emptyMessage={`No complaints and no reviews below 4 stars across ${totalReviews} review${totalReviews === 1 ? "" : "s"}. Nothing needs your attention right now.`}
     >
       {visible.map((r) => (
         <div key={r.id} className="rounded-md border border-slate-200 p-4">

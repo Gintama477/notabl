@@ -19,10 +19,16 @@ import { getLatestWeeklyReport, getThemeRollupsForRun, getNewReviewsForRun } fro
 
 export type RunAnalysisResult = {
   analysisRunId: string;
-  weeklyReportId: string;
+  // null on an INTERMEDIATE round — a round that stopped early with
+  // reviewsRemaining > 0 does pure extraction and writes no report at all
+  // (see needsNarrative below). Only the round that finishes the backlog
+  // produces one. No caller reads this field today; it's kept because it
+  // is the honest description of what the run produced.
+  weeklyReportId: string | null;
   reviewsNewlyAnalyzed: number;
   // Genuinely new reviews since the last report (periodStart-periodEnd) —
   // NOT the cumulative total the report's theme rollup is built from.
+  // Always 0 on an intermediate round, where it isn't computed at all.
   reviewsInPeriod: number;
   // Reviews still needing analysis with the CURRENT provider version after
   // this call — either never analyzed, or stale (analyzed by an older
@@ -35,15 +41,36 @@ export type RunAnalysisResult = {
 
 // Wall-clock budget for the per-review extraction loop, not a fixed review
 // count — per-call latency to the AI provider varies (DemoProvider is
-// instant; real Claude calls run roughly a second each), so a count-based
-// cap would either waste headroom or still risk timing out depending on
-// which provider is active. 45s leaves the ~60s Vercel function budget
-// (see maxDuration on the calling routes) enough room for the rollup,
-// narrative generation, and inserts that run after this loop. When the
-// budget is hit, the run still completes normally — rollups, narrative,
-// and a "completed" status — over whatever was analyzed so far; it just
-// reports reviewsRemaining > 0 so the caller knows to run again.
-const EXTRACTION_BUDGET_MS = 45_000;
+// instant; real Claude calls take seconds), so a count-based cap would
+// either waste headroom or still risk timing out depending on which
+// provider is active.
+//
+// MEASURED, DO NOT RAISE WITHOUT RE-MEASURING. With this at 45s, every
+// completed run in production took 56-59 seconds against the hard
+// maxDuration = 60 ceiling on the calling routes (app/api/analysis/run,
+// the connect-google routes) — 1 to 4 seconds of headroom. Any run with
+// slightly more work than average was killed mid-flight by Vercel, left
+// stranded as status "running", and swept as failed by the next attempt
+// (see STALE_RUN_MS below). Those runs were not erroring; they were being
+// executed to death, and surfaced to the customer as "Analysis failed."
+// even though every analyzed review had been saved.
+//
+// The 56-59s broke down as 45s of extraction plus ~11-14s of rollup,
+// narrative generation, and DB writes AFTERWARD. Two changes fixed it:
+// intermediate rounds no longer generate a narrative at all (see
+// needsNarrative below — that's the bigger win), and this dropped to 30s.
+// Concurrency (BATCH_SIZE below) means 30s now covers more reviews than
+// 45s did back when extraction was strictly sequential, so throughput
+// still improves while leaving ~30s of headroom instead of ~1s.
+const EXTRACTION_BUDGET_MS = 30_000;
+
+// The round that finishes the backlog is the only one that also pays for
+// the rollup, a full narrative-generation API call, and the report write
+// afterward (~11-14s measured). It gets a tighter extraction budget so
+// those have room inside the same 60s ceiling. Applied only to the batch
+// that would actually clear the backlog; every earlier batch gets the
+// full EXTRACTION_BUDGET_MS above, since nothing expensive follows it.
+const FINAL_ROUND_EXTRACTION_BUDGET_MS = 20_000;
 
 // A run is inserted as "running" and only updated at the very end. If the
 // serverless function is killed mid-run (hard timeout, deploy, OOM) neither
@@ -140,7 +167,21 @@ export async function runAnalysisForBusiness(
     const staleReviews = allBusinessReviews.filter((r) => !(r.analyzedAt && r.analyzedWith === currentVersion));
 
     let newlyAnalyzed = 0;
-    let reviewsRemaining = 0;
+    // Two distinct reasons a review can still need work after this loop,
+    // deliberately counted apart even though callers only ever see their
+    // sum as reviewsRemaining:
+    //   - deferredForBudget: never attempted this round, because the
+    //     wall-clock budget ran out. A later round WILL make progress on
+    //     these, so the narrative can safely wait for it.
+    //   - failedThisRound: attempted and threw (a bad AI response twice
+    //     over — extractReviewThemes already retries once). Another round
+    //     may well fail on these too.
+    // The distinction is load-bearing: gating the narrative on the SUM
+    // would mean a single permanently-failing review blocks report
+    // generation forever, replacing the stall this change exists to fix
+    // with a subtler one. It's gated on deferredForBudget alone instead.
+    let deferredForBudget = 0;
+    let failedThisRound = 0;
     const loopStartedAt = Date.now();
 
     // Each extractReviewThemes() call is a fully independent HTTP
@@ -159,14 +200,22 @@ export async function runAnalysisForBusiness(
     const BATCH_SIZE = 5;
 
     for (let i = 0; i < staleReviews.length; i += BATCH_SIZE) {
+      // The batch that would clear the backlog is the one the narrative
+      // runs after, so it has to clear a tighter bar to leave that room.
+      // If it doesn't, we stop here instead: this round stays
+      // extraction-only and the next one picks up a small remainder plus
+      // the narrative, comfortably inside the ceiling either way.
+      const isFinishingBatch = i + BATCH_SIZE >= staleReviews.length;
+      const budgetMs = isFinishingBatch ? FINAL_ROUND_EXTRACTION_BUDGET_MS : EXTRACTION_BUDGET_MS;
+
       // Budget checked BETWEEN batches, not mid-batch — every review in an
       // in-flight batch is let finish so none is left half-processed
       // (stale mentions deleted but fresh ones never written). Whatever
       // hasn't been attempted yet when the budget runs out is reported as
       // reviewsRemaining, same as the old per-review check did one at a
       // time.
-      if (Date.now() - loopStartedAt > EXTRACTION_BUDGET_MS) {
-        reviewsRemaining += staleReviews.length - i;
+      if (Date.now() - loopStartedAt > budgetMs) {
+        deferredForBudget += staleReviews.length - i;
         break;
       }
 
@@ -184,9 +233,57 @@ export async function runAnalysisForBusiness(
           newlyAnalyzed++;
         } else {
           console.error("Review extraction failed, will retry next run:", outcome.reason);
-          reviewsRemaining++;
+          failedThisRound++;
         }
       }
+    }
+
+    const reviewsRemaining = deferredForBudget + failedThisRound;
+
+    // INTERMEDIATE ROUND: extraction stopped early with work left over, so
+    // the caller (RunAnalysisButton / ConnectReviewsCard / the admin form)
+    // is about to call straight back for another round. Everything below
+    // this point — two full mention scans, the rollup, a narrative
+    // generation API call, and a weeklyReports insert — would be thrown
+    // away moments later when the next round recomputes it against more
+    // data. That waste is what pushed runs from ~45s to 56-59s against a
+    // 60s ceiling and got them killed mid-flight (see
+    // EXTRACTION_BUDGET_MS). Intermediate rounds are pure extraction now:
+    // they bank every analyzed review, mark themselves completed, and
+    // report reviewsRemaining so the loop continues.
+    //
+    // The dashboard keeps showing the PREVIOUS report while this is in
+    // flight, which is the existing, correct behavior — a customer mid
+    // re-analysis sees their last good report rather than a half-built one.
+    //
+    // Gated on deferredForBudget, NOT reviewsRemaining — see their
+    // declarations above. If the only thing left is reviews that actively
+    // failed, another round won't reliably clear them, so we fall through
+    // and build the report from everything that DID succeed rather than
+    // withholding it indefinitely. (That repeat case stays cheap: the next
+    // round analyzes nothing new, so the cost-control reuse check further
+    // down matches the unchanged rollup and skips narrative generation.)
+    if (deferredForBudget > 0) {
+      await db
+        .update(analysisRuns)
+        .set({ status: "completed", reviewsAnalyzedCount: newlyAnalyzed, completedAt: new Date().toISOString() })
+        .where(eq(analysisRuns.id, run.id));
+
+      await db.insert(automationLogs).values({
+        jobName: "run-analysis",
+        businessId,
+        status: "success",
+        detail: `Run ${run.id} completed extraction only: ${newlyAnalyzed} newly analyzed, ${reviewsRemaining} still remaining. No narrative generated — that runs once, on the round that finishes the backlog.`,
+        finishedAt: new Date().toISOString(),
+      });
+
+      return {
+        analysisRunId: run.id,
+        weeklyReportId: null,
+        reviewsNewlyAnalyzed: newlyAnalyzed,
+        reviewsInPeriod: 0,
+        reviewsRemaining,
+      };
     }
 
     // Cumulative model: every report's theme rollup reflects the business's

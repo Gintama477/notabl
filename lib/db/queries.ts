@@ -572,6 +572,29 @@ export async function getReviewCountForBusiness(businessId: string) {
   return rows.length;
 }
 
+// Reviews rated 1-3 stars, newest first — "anything below 4 stars," which
+// is what the dashboard's Reviews Worth Your Attention section promises
+// (components/dashboard/LowRatedReviewsCard.tsx). Deliberately wider than
+// getPaginatedReviewsForBusiness's "low" filter (1-2 only): a 3-star
+// review is a real, actionable piece of criticism, and for a high-rated
+// practice it's often the only criticism there is.
+//
+// No isDemoData filter on purpose, unlike most review queries here: a
+// business's reviews are all demo or all real, never mixed
+// (connectGoogleReviewSource deletes every demo review the moment a real
+// Google source is connected), so filtering would only ever produce an
+// empty list for a still-on-demo business — which would render as the
+// false claim "no reviews below 4 stars" over a demo dataset that has
+// them.
+export async function getReviewsNeedingAttention(businessId: string, limit = 25) {
+  return db
+    .select()
+    .from(reviews)
+    .where(and(eq(reviews.businessId, businessId), lte(reviews.rating, 3)))
+    .orderBy(desc(reviews.reviewDate))
+    .limit(limit);
+}
+
 export async function getSubscriptionForAccount(accountId: string) {
   const [row] = await db.select().from(subscriptions).where(eq(subscriptions.accountId, accountId)).limit(1);
   return row ?? null;

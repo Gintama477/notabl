@@ -11,7 +11,7 @@ import {
   getNewReviewsForRun,
   hasReviewRequestPageView,
   getReviewRequestStats,
-  getPaginatedReviewsForBusiness,
+  getReviewsNeedingAttention,
   getGoogleReviewsManageUrl,
 } from "@/lib/db/queries";
 import { Header } from "@/components/marketing/Header";
@@ -38,7 +38,6 @@ import { formatLastUpdated } from "@/lib/reports/formatLastUpdated";
 import { generateReviewRequestQrSvg } from "@/lib/reviews/reviewRequestQr";
 import { OUTSCRAPER_REVIEWS_LIMIT } from "@/lib/reviews/outscraperProvider";
 import { getSiteUrl } from "@/lib/siteUrl";
-import { ThemeCategory } from "@/config/themes";
 
 export default async function DashboardPage() {
   const accountId = await getSessionAccountId();
@@ -83,27 +82,17 @@ export default async function DashboardPage() {
   const topNegativeThemes = data.latestReport ? JSON.parse(data.latestReport.topNegativeThemesJson) : [];
   const recommendedActions = data.latestReport ? JSON.parse(data.latestReport.recommendedActionsJson) : [];
 
-  // A genuinely good practice legitimately has no AI-flagged negative
-  // themes — the common case, not an edge case (most practices in the
-  // outreach queue are 4.5+ stars). Rather than leave "What Patients
-  // Dislike" empty, fall back to the 2-3 rollup themes with the lowest
-  // positive ratio, reframed honestly as relative weak points. Filtered to
-  // positiveCount >= negativeCount so this can never surface a genuinely
-  // negative-leaning theme under positive-sounding framing, even if the
-  // narrative's top-negative-themes list happened to miss one — the same
-  // "never invent or mislabel a negative" constraint that
-  // WhatPatientsDislike's fallback branch enforces on the display side.
-  const weakestThemes =
-    topNegativeThemes.length === 0
-      ? [...data.rollups]
-          .filter((r) => r.mentionCount > 0 && r.positiveCount >= r.negativeCount)
-          .sort((a, b) => a.positiveCount / a.mentionCount - b.positiveCount / b.mentionCount)
-          .slice(0, 3)
-          .map((r) => ({
-            category: r.themeCategory as ThemeCategory,
-            summary: `Praised in ${r.positiveCount} of ${r.mentionCount} mention${r.mentionCount === 1 ? "" : "s"} — your least-dominant positive theme, not a complaint.`,
-          }))
-      : [];
+  // What the right-hand column shows, in strict priority order:
+  //   1. genuinely negative theme mentions -> "What Patients Dislike"
+  //   2. otherwise, real reviews below 4 stars -> "Reviews Worth Your
+  //      Attention", verbatim, with a reply button
+  //   3. otherwise, one honest line saying nothing needs attention
+  //
+  // There is deliberately no fourth option that reframes praise as a
+  // weakness — see the comment on WhatPatientsDislike in
+  // components/dashboard/Sections.tsx for the version that did and why it
+  // was wrong.
+  const hasNegativeThemes = topNegativeThemes.length > 0;
 
   // A couple of real, verbatim quotes per theme, keyed by sentiment — the
   // business's whole current analysis, not just its latest run (see
@@ -111,19 +100,13 @@ export default async function DashboardPage() {
   // business with nothing analyzed yet, so no latestRun guard is needed here.
   const excerptsByTheme = await getThemeExcerptsForBusiness(business.id, 2);
 
-  // The practice's own lowest-rated reviews, full text, reply button
-  // attached — see components/dashboard/LowRatedReviewsCard.tsx for why
-  // this is the highest-value addition to an otherwise-sparse dashboard
-  // for a good practice. Real reviews only: getPaginatedReviewsForBusiness
-  // excludes demo data by construction, so this is skipped entirely (not
-  // fetched, and never rendered — see the JSX below) while still on demo
-  // data, same gating as the "All Reviews" link. Skipping it there matters:
-  // an empty result for a demo business would read as "no low-rated
-  // reviews," which is false — the demo dataset has some, they're just not
-  // real reviews this query is allowed to show.
-  const lowRatedReviews = data.hasDemoData
-    ? []
-    : (await getPaginatedReviewsForBusiness(business.id, { page: 1, pageSize: 25, ratingFilter: "low" })).reviews;
+  // Only fetched when it's actually what the right-hand column will show
+  // (priority 2 above) — no point querying for a practice whose negative
+  // themes already fill that slot.
+  const reviewsNeedingAttention = hasNegativeThemes ? [] : await getReviewsNeedingAttention(business.id);
+  // Null on demo data, where there's no connected Google listing to send
+  // anyone to; DraftReplyButton handles that by omitting its "Find it on
+  // Google" link.
   const googleReviewsUrl = data.hasDemoData ? null : await getGoogleReviewsManageUrl(business.id);
 
   // The literal "what came in since last time" list — deliberately not the
@@ -319,25 +302,19 @@ export default async function DashboardPage() {
                       applies uniformly to the other paired rows below. */}
                   <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
                     <WhatPatientsLove items={topPositiveThemes} excerptsByTheme={excerptsByTheme} />
-                    <WhatPatientsDislike
-                      items={topNegativeThemes}
-                      weakestThemes={weakestThemes}
-                      totalReviews={data.totalReviews}
-                      excerptsByTheme={excerptsByTheme}
-                    />
+                    {/* Priority order, see hasNegativeThemes above: real
+                        complaints if there are any, otherwise the real
+                        below-4-star reviews, otherwise one honest line. */}
+                    {hasNegativeThemes ? (
+                      <WhatPatientsDislike items={topNegativeThemes} excerptsByTheme={excerptsByTheme} />
+                    ) : (
+                      <LowRatedReviewsCard
+                        reviews={reviewsNeedingAttention}
+                        googleReviewsUrl={googleReviewsUrl}
+                        totalReviews={data.totalReviews}
+                      />
+                    )}
                   </div>
-
-                  {/* Full-width, directly under the row above — this is the
-                      highest-value fill for whatever dead space that row's
-                      short "Dislike" column just gave up, and it's real
-                      content (verbatim reviews), not a summary of the theme
-                      cards beside it. See lowRatedReviews's fetch above for
-                      why this is skipped entirely on demo data. */}
-                  {!data.hasDemoData && (
-                    <div className="mt-8">
-                      <LowRatedReviewsCard reviews={lowRatedReviews} googleReviewsUrl={googleReviewsUrl} />
-                    </div>
-                  )}
 
                   <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
                     <NewThisWeek reviews={newReviews} />
