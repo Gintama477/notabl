@@ -4,6 +4,8 @@ import { hasValidAdminSession } from "@/lib/auth/adminSession";
 import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { PilotInviteForm, PilotToggleTable, PilotRow, ConnectGoogleReviewsForm } from "@/components/admin/PilotManagement";
 import { OutreachControls, OutreachQueueTable, ProspectRow } from "@/components/admin/OutreachQueue";
+import { DeleteBusinessTable, DeletableBusinessRow } from "@/components/admin/DeleteBusiness";
+import { SAMPLE_REPORT_ACCOUNT_EMAIL, getReviewCountForBusiness } from "@/lib/db/queries";
 
 // Intentionally minimal per the development rule ("do NOT overbuild the
 // admin dashboard") — raw numbers, no charts library, no pagination.
@@ -78,6 +80,26 @@ export default async function AdminPage({
       ),
     };
   });
+
+  // Every rule the delete route enforces is mirrored here so the panel can
+  // show WHY a business is protected before anyone types its name — the
+  // server (deleteBusinessAndAllData) remains the authority and re-checks
+  // all of it.
+  const deletableRows: DeletableBusinessRow[] = await Promise.all(
+    data.businesses.map(async (b) => {
+      const account = data.accounts.find((a) => a.id === b.accountId);
+      const subscription = data.subscriptions.find((s) => s.accountId === b.accountId);
+      const stripeSubId = subscription?.stripeSubscriptionId;
+      return {
+        businessId: b.id,
+        name: b.name,
+        email: account?.email ?? "—",
+        reviewCount: await getReviewCountForBusiness(b.id),
+        isSampleBusiness: account?.email === SAMPLE_REPORT_ACCOUNT_EMAIL,
+        hasRealStripeSubscription: Boolean(stripeSubId && !stripeSubId.startsWith("demo_")),
+      };
+    })
+  );
 
   const APPEAL_TYPE_LABELS: Record<string, string> = {
     business_already_claimed: "Google connect blocked (already claimed)",
@@ -278,6 +300,23 @@ export default async function AdminPage({
             columns={["Recipient", "Type", "Status", "Time"]}
             rows={data.emailDeliveries.map((e) => [e.recipientEmail, e.emailType, e.status, new Date(e.createdAt).toLocaleString()])}
           />
+        </Section>
+
+        <Section title="Danger Zone — Delete Business">
+          <div className="border-b border-slate-200 bg-red-50 p-4">
+            <p className="text-sm text-red-900">
+              Permanently deletes a business, its account, and every review, report, analysis run, and event
+              belonging to it. <strong>There is no undo</strong> — the only record afterwards is an
+              automation_logs entry.
+            </p>
+            <p className="mt-2 text-xs text-red-800">
+              Built because the daily alerts cron re-syncs and re-analyzes every active/trialing business with a
+              connected Google source, so a leftover test business spends real Outscraper and Anthropic money
+              every day until it&apos;s removed. The public sample-report business and any account with a real Stripe
+              subscription are protected and cannot be deleted here.
+            </p>
+          </div>
+          <DeleteBusinessTable rows={deletableRows} />
         </Section>
 
         <Section title={`Feedback (${data.feedback.length})`}>

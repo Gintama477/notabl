@@ -22,7 +22,7 @@ import {
   patientFeedback,
   reviewReplies,
 } from "@/lib/db/schema.pg";
-import { eq, desc, and, gte, lt, lte, ne, ilike, isNotNull, isNull } from "drizzle-orm";
+import { eq, desc, and, or, gte, lt, lte, ne, ilike, isNotNull, isNull, inArray } from "drizzle-orm";
 import { getReviewDataProvider } from "@/lib/reviews/provider";
 import { OUTSCRAPER_REVIEWS_LIMIT } from "@/lib/reviews/outscraperProvider";
 import { SignupInput } from "@/lib/validation/signup";
@@ -390,6 +390,140 @@ export async function connectGoogleReviewSource(businessId: string, businessName
   await db.update(reviewSources).set({ lastSyncedAt: new Date().toISOString() }).where(eq(reviewSources.id, source.id));
 
   return { imported, skipped, sourceId: source.id, possiblyTruncated };
+}
+
+/**
+ * Thrown when a delete is refused on purpose (a real paying customer, or
+ * the public sample business) rather than failing. A distinct class so the
+ * route can return 409 with the explanation instead of a generic 500.
+ */
+export class BusinessDeletionRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BusinessDeletionRefusedError";
+  }
+}
+
+/**
+ * Irreversibly deletes a business, its owning account, and everything
+ * either one references. Built because the daily alerts cron
+ * (lib/alerts/reviewAlerts.ts) re-syncs and re-analyzes every
+ * active/trialing business with a connected Google source — so a leftover
+ * test business spends real Outscraper and Anthropic money every day,
+ * forever, with no way to stop it short of editing production tables by
+ * hand.
+ *
+ * Deletes explicitly in dependency order inside a transaction rather than
+ * leaning on the FK cascades. Most of these WOULD cascade from accounts,
+ * but four tables (events, automation_logs, feedback, support_appeals) are
+ * onDelete: "set null", so a cascade alone leaves orphaned rows pointing
+ * at nothing. Being explicit also means the row counts below are real
+ * measured numbers for the audit log, not assumptions.
+ *
+ * Deliberately NOT deleted, left to the schema's own SET NULL:
+ *   - automation_logs: the audit trail, including this deletion's own
+ *     entry. Losing it would defeat the point of logging.
+ *   - feedback / support_appeals: product feedback and support history
+ *     retain their value once detached from a deleted account.
+ */
+export async function deleteBusinessAndAllData(
+  businessId: string,
+  confirmName: string
+): Promise<{ businessName: string; accountEmail: string; counts: Record<string, number> }> {
+  const [business] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (!business) throw new BusinessDeletionRefusedError("That business no longer exists.");
+
+  const [account] = await db.select().from(accounts).where(eq(accounts.id, business.accountId)).limit(1);
+  if (!account) throw new BusinessDeletionRefusedError("That business has no owning account — refusing to guess what to delete.");
+
+  // Re-checked server-side, never trusting the UI's own check: a mistyped
+  // name must not delete anything even if the request is crafted by hand.
+  if (confirmName !== business.name) {
+    throw new BusinessDeletionRefusedError("The typed name didn't match the business name exactly. Nothing was deleted.");
+  }
+
+  // The public /sample-report page renders this business. Deleting it
+  // breaks a live marketing page, so it's excluded outright rather than
+  // merely warned about — it should never be removable by a stray click.
+  if (account.email === SAMPLE_REPORT_ACCOUNT_EMAIL) {
+    throw new BusinessDeletionRefusedError(
+      "This is the public sample-report business. Deleting it would break the live /sample-report page, so it can't be deleted here."
+    );
+  }
+
+  // A real paying customer's data must never be removable from an admin
+  // panel. "demo_" ids come from the demo billing simulator
+  // (app/api/billing/demo-checkout), so those are safe; anything else came
+  // from real Stripe.
+  const [subscription] = await db.select().from(subscriptions).where(eq(subscriptions.accountId, account.id)).limit(1);
+  if (subscription?.stripeSubscriptionId && !subscription.stripeSubscriptionId.startsWith("demo_")) {
+    throw new BusinessDeletionRefusedError(
+      `This account has a real Stripe subscription (${subscription.stripeSubscriptionId}). Cancel it in Stripe first if this really should be deleted — refusing to remove a paying customer's data from an admin panel.`
+    );
+  }
+
+  const businessReviewIds = (
+    await db.select({ id: reviews.id }).from(reviews).where(eq(reviews.businessId, businessId))
+  ).map((r) => r.id);
+
+  const counts: Record<string, number> = {};
+
+  await db.transaction(async (tx) => {
+    const n = async (label: string, run: Promise<{ id: string }[]>) => {
+      counts[label] = (await run).length;
+    };
+
+    if (businessReviewIds.length > 0) {
+      await n(
+        "review_theme_mentions",
+        tx.delete(reviewThemeMentions).where(inArray(reviewThemeMentions.reviewId, businessReviewIds)).returning({ id: reviewThemeMentions.id })
+      );
+      await n(
+        "review_replies",
+        tx.delete(reviewReplies).where(inArray(reviewReplies.reviewId, businessReviewIds)).returning({ id: reviewReplies.id })
+      );
+    } else {
+      counts["review_theme_mentions"] = 0;
+      counts["review_replies"] = 0;
+    }
+
+    await n("reviews", tx.delete(reviews).where(eq(reviews.businessId, businessId)).returning({ id: reviews.id }));
+    await n("theme_rollups", tx.delete(themeRollups).where(eq(themeRollups.businessId, businessId)).returning({ id: themeRollups.id }));
+    await n("weekly_reports", tx.delete(weeklyReports).where(eq(weeklyReports.businessId, businessId)).returning({ id: weeklyReports.id }));
+    await n("analysis_runs", tx.delete(analysisRuns).where(eq(analysisRuns.businessId, businessId)).returning({ id: analysisRuns.id }));
+    await n("review_sources", tx.delete(reviewSources).where(eq(reviewSources.businessId, businessId)).returning({ id: reviewSources.id }));
+    await n("patient_feedback", tx.delete(patientFeedback).where(eq(patientFeedback.businessId, businessId)).returning({ id: patientFeedback.id }));
+    await n("email_deliveries", tx.delete(emailDeliveries).where(eq(emailDeliveries.businessId, businessId)).returning({ id: emailDeliveries.id }));
+    // Both sides: an event can be tied to the account, the business, or
+    // both, and SET NULL would otherwise leave analytics rows that inflate
+    // nothing but reference a business that no longer exists.
+    await n(
+      "events",
+      tx.delete(events).where(or(eq(events.businessId, businessId), eq(events.accountId, account.id))).returning({ id: events.id })
+    );
+    await n("subscriptions", tx.delete(subscriptions).where(eq(subscriptions.accountId, account.id)).returning({ id: subscriptions.id }));
+    await n("users", tx.delete(users).where(eq(users.accountId, account.id)).returning({ id: users.id }));
+    await n("businesses", tx.delete(businesses).where(eq(businesses.id, businessId)).returning({ id: businesses.id }));
+    await n("accounts", tx.delete(accounts).where(eq(accounts.id, account.id)).returning({ id: accounts.id }));
+
+    // Written inside the transaction so the record and the deletion commit
+    // together — a deletion that isn't logged, or a log for a deletion
+    // that rolled back, are both worse than either alone. businessId is
+    // null because the row it would reference is gone by this point; the
+    // name and email live in the detail text, which is the only surviving
+    // record of what was here.
+    await tx.insert(automationLogs).values({
+      jobName: "admin-delete-business",
+      businessId: null,
+      status: "success",
+      detail: `Deleted business "${business.name}" (id ${businessId}, account ${account.email}). Rows deleted: ${Object.entries(counts)
+        .map(([table, count]) => `${table}=${count}`)
+        .join(", ")}.`,
+      finishedAt: new Date().toISOString(),
+    });
+  });
+
+  return { businessName: business.name, accountEmail: account.email, counts };
 }
 
 export async function getBusinessForAccount(accountId: string) {
