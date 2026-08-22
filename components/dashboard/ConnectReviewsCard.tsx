@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppealForm } from "./AppealForm";
 import { LoadingDots } from "@/components/ui/LoadingDots";
+import { useAnalysisProgress } from "./useAnalysisProgress";
 
 const PLACE_ID_FINDER_URL = "https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder";
 
@@ -48,7 +49,7 @@ export function ConnectReviewsCard() {
   const router = useRouter();
   const [placeId, setPlaceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState<{ analyzed: number; total: number } | null>(null);
+  const { progress, start, recordRound, clear } = useAnalysisProgress();
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [claimedByOther, setClaimedByOther] = useState(false);
 
@@ -56,7 +57,11 @@ export function ConnectReviewsCard() {
     e.preventDefault();
     setSubmitting(true);
     setResult(null);
-    setProgress(null);
+    // Timing starts here, not inside the round loop below — the initial
+    // connect-google request below does real extraction work synchronously
+    // (see its own ~45s-budgeted first pass) and its latency is real
+    // elapsed time that belongs in the throughput measurement.
+    start();
     setClaimedByOther(false);
 
     try {
@@ -92,9 +97,12 @@ export function ConnectReviewsCard() {
       const importedMessage = `Connected — imported ${data.imported} review${data.imported === 1 ? "" : "s"}.`;
       let totalAnalyzed = data.reviewsNewlyAnalyzed ?? 0;
       let remaining = data.reviewsRemaining ?? 0;
+      // Round 1 — the connect call above already ran its own first
+      // ~45s-budgeted analysis pass, so this is real progress with a real
+      // elapsed time behind it, not a zero starting point.
+      recordRound(totalAnalyzed, remaining);
 
       for (let round = 0; remaining > 0 && round < MAX_ANALYSIS_ROUNDS; round++) {
-        setProgress({ analyzed: totalAnalyzed, total: totalAnalyzed + remaining });
         const runRes = await fetch("/api/analysis/run", { method: "POST" });
         const runData = await runRes.json().catch(() => null);
 
@@ -105,13 +113,14 @@ export function ConnectReviewsCard() {
             message: `${importedMessage} Analyzed ${totalAnalyzed} review(s) so far, then paused: ${reason} Click "Run Analysis Now" on your dashboard to finish.`,
           });
           setSubmitting(false);
-          setProgress(null);
+          clear();
           router.refresh();
           return;
         }
 
         totalAnalyzed += runData.reviewsNewlyAnalyzed ?? 0;
         remaining = runData.reviewsRemaining ?? 0;
+        recordRound(totalAnalyzed, remaining);
       }
 
       if (remaining > 0) {
@@ -123,7 +132,7 @@ export function ConnectReviewsCard() {
           message: `${importedMessage} Analyzed ${totalAnalyzed} review(s) so far — still going. Click "Run Analysis Now" on your dashboard to finish the rest.`,
         });
         setSubmitting(false);
-        setProgress(null);
+        clear();
         router.refresh();
         return;
       }
@@ -133,7 +142,7 @@ export function ConnectReviewsCard() {
     } catch {
       setResult({ ok: false, message: "Connection failed. Please try again." });
       setSubmitting(false);
-      setProgress(null);
+      clear();
     }
   }
 
@@ -192,7 +201,9 @@ export function ConnectReviewsCard() {
               >
                 {submitting ? (
                   <>
-                    {progress ? `Analyzing your reviews… ${progress.analyzed} of ${progress.total}` : "Connecting…"}
+                    {progress
+                      ? `Analyzing your reviews… ${progress.analyzed} of ${progress.total}${progress.estimateLabel ? ` · ${progress.estimateLabel}` : ""}`
+                      : "Connecting…"}
                     <LoadingDots />
                   </>
                 ) : (
@@ -200,6 +211,16 @@ export function ConnectReviewsCard() {
                 )}
               </button>
             </form>
+            {submitting && progress && (
+              // Matters most right here: this is a brand-new paying
+              // customer's very first experience of the product, and the
+              // one thing a long unattended wait actually risks is them
+              // closing the tab — which the resumable design doesn't need
+              // them to avoid, but they don't know that unless told.
+              <p className="mt-2 text-xs text-slate-500">
+                You can leave this page — analysis continues, and you can pick it up here any time.
+              </p>
+            )}
             {claimedByOther ? (
               <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
                 <p className="text-sm font-medium text-amber-900">This business already has a Notabl account.</p>
