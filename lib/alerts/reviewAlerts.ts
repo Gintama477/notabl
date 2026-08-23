@@ -3,15 +3,21 @@
 // fires regardless of whether anything happened; a practice getting a
 // handful of reviews a week mostly got "nothing notable this period,"
 // which teaches the customer the product is worthless. This module instead
-// syncs, decides whether there's genuinely something worth telling the
-// owner, and sends AT MOST one bundled email per business per day.
-// Silence is the correct, expected output on a quiet day.
+// decides whether there's genuinely something worth telling the owner, and
+// sends AT MOST one bundled email per business per day. Silence is the
+// correct, expected output on a quiet day.
+//
+// Split into two halves on purpose — deciding/alerting (cheap, runs for
+// every business every day) and re-importing from Google (expensive, one
+// business per run). They used to be one function per business, which is
+// what made the cron time out: a single Outscraper fetch on a large
+// practice consumed the whole 60-second ceiling before anything else
+// happened. See pickBusinessToSync and syncBusinessReviews below.
 
 import { db } from "@/lib/db/client";
 import { businesses, accounts, subscriptions, reviewSources, reviews, patientFeedback, emailDeliveries } from "@/lib/db/schema.pg";
 import { eq, and, or, gt, desc } from "drizzle-orm";
 import { connectGoogleReviewSource, getDashboardData } from "@/lib/db/queries";
-import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { sendReviewAlertEmail, sendMonthlySummaryEmail } from "@/lib/email/send";
 import { getSiteUrl } from "@/lib/siteUrl";
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
@@ -32,6 +38,8 @@ export type AlertCandidate = {
   accountEmail: string;
   placeId: string;
   connectedAt: string;
+  /** Drives the sync rotation — see pickBusinessToSync. Null = never synced. */
+  lastSyncedAt: string | null;
 };
 
 /**
@@ -49,6 +57,7 @@ export async function getAlertCandidateBusinesses(): Promise<AlertCandidate[]> {
       accountEmail: accounts.email,
       placeId: reviewSources.sourceUrl,
       connectedAt: reviewSources.connectedAt,
+      lastSyncedAt: reviewSources.lastSyncedAt,
     })
     .from(businesses)
     .innerJoin(accounts, eq(businesses.accountId, accounts.id))
@@ -69,32 +78,72 @@ export type AlertOutcome =
   | { businessId: string; action: "error"; error: string };
 
 /**
- * The one function per business: sync -> analyze if needed -> decide ->
- * send at most one email. Every step is independently safe to re-run (sync
- * respects connectGoogleReviewSource's own resync cooldown, analysis is
- * resumable/idempotent per lib/analysis/runAnalysis.ts, and "what's new"
- * is always computed fresh from stored data) so a failure partway through
- * one business never corrupts state for the next cron run.
+ * Picks the ONE business to re-sync on this run: whichever went longest
+ * without one (never-synced first).
+ *
+ * One per run, because a single Outscraper fetch can consume the entire
+ * 60-second function on its own — a 449-review practice did exactly that
+ * and killed the cron before it wrote a single log line. There is no
+ * budget tuning that fixes it: 60s is Vercel Hobby's hard ceiling, so the
+ * only option is doing less per request.
+ *
+ * The trade-off, stated plainly: with N connected businesses each gets
+ * fresh Google data every N days rather than daily. Alerts still run daily
+ * for everyone against already-imported data. If N grows enough for that
+ * lag to matter, this needs a real queue rather than a bigger budget.
+ */
+export function pickBusinessToSync(candidates: AlertCandidate[]): AlertCandidate | null {
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((a, b) => {
+    if (a.lastSyncedAt === b.lastSyncedAt) return 0;
+    if (a.lastSyncedAt === null) return -1;
+    if (b.lastSyncedAt === null) return 1;
+    return a.lastSyncedAt < b.lastSyncedAt ? -1 : 1;
+  })[0];
+}
+
+/**
+ * Re-imports one business's Google reviews. Deliberately does NOT analyze
+ * afterwards — that is the invariant the connect routes already document
+ * (app/api/reviews/connect-google/route.ts): never chain an external
+ * provider call and an analysis pass in one request. Newly imported
+ * reviews are picked up by the next analysis run, which the dashboard and
+ * the manual button both drive in properly-budgeted rounds.
+ *
+ * Safe to be killed mid-flight: reviews are inserted one at a time and
+ * deduped by (reviewSourceId, externalReviewId), and lastSyncedAt is only
+ * written on success — so a partial import just resumes next run.
+ */
+export async function syncBusinessReviews(
+  candidate: AlertCandidate
+): Promise<{ businessId: string; action: "synced" | "sync_error"; detail: string }> {
+  try {
+    const sync = await connectGoogleReviewSource(candidate.businessId, candidate.businessName, candidate.placeId);
+    return {
+      businessId: candidate.businessId,
+      action: "synced",
+      detail: sync.cooledDown
+        ? "skipped — synced within the last 10 minutes"
+        : `imported ${sync.imported}, skipped ${sync.skipped} already-present`,
+    };
+  } catch (err) {
+    console.error(`check-reviews sync failed for business ${candidate.businessId}:`, err);
+    return { businessId: candidate.businessId, action: "sync_error", detail: String(err) };
+  }
+}
+
+/**
+ * Decides whether this business has anything worth emailing about, and
+ * sends at most one email if so. Reads ONLY already-stored data — no
+ * Outscraper call, no analysis pass (see syncBusinessReviews above for
+ * why those moved out). That makes this cheap and predictable enough to
+ * run for every candidate on every cron run, which is what keeps alerts
+ * daily even though imports now rotate.
  */
 export async function processBusinessForAlert(candidate: AlertCandidate): Promise<AlertOutcome> {
-  const { businessId, businessName, accountEmail, placeId, connectedAt } = candidate;
+  const { businessId, businessName, accountEmail, connectedAt } = candidate;
 
   try {
-    // Respects connectGoogleReviewSource's own 10-minute resync cooldown —
-    // deliberately not bypassed. A daily cron is nowhere near that window
-    // in normal operation; this only matters if the cron gets triggered
-    // more than once in quick succession (e.g. manual testing).
-    const sync = await connectGoogleReviewSource(businessId, businessName, placeId);
-
-    // Only pay for analysis when there's genuinely something new to
-    // analyze. Reuses the existing wall-clock-budgeted/resumable behavior
-    // (lib/analysis/runAnalysis.ts) as-is — if a business needs more than
-    // one pass, tomorrow's cron run continues it rather than this one
-    // blowing its own time budget.
-    if (sync.imported > 0) {
-      await runAnalysisForBusiness(businessId, businessName, new Date().toISOString());
-    }
-
     // "Since last contact" anchor: the most recent alert OR monthly
     // summary actually sent to this business, falling back to when the
     // Google source was first connected. The fallback matters on a
