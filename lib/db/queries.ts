@@ -361,19 +361,34 @@ export async function connectGoogleReviewSource(businessId: string, businessName
   // to review_theme_mentions via onDelete: "cascade" in schema.pg.ts.
   await db.delete(reviews).where(and(eq(reviews.businessId, businessId), eq(reviews.isDemoData, true)));
 
-  let imported = 0;
+  // Dedupe in memory against ONE query, rather than a SELECT per fetched
+  // review. That per-review query was the real cost of a re-sync: on a
+  // 449-review practice where every review already exists, it meant 449
+  // sequential round trips to Supabase — roughly 20-35 seconds of pure
+  // network latency on top of the Outscraper fetch, which is what pushed
+  // the daily alerts cron past its 60-second ceiling and killed it before
+  // it could finish. The fetch itself was never the problem.
+  const existingRows = await db
+    .select({ externalReviewId: reviews.externalReviewId })
+    .from(reviews)
+    .where(eq(reviews.reviewSourceId, source.id));
+  const seenExternalIds = new Set(
+    existingRows.map((r) => r.externalReviewId).filter((id): id is string => id !== null)
+  );
+
+  const toInsert: (typeof reviews.$inferInsert)[] = [];
   let skipped = 0;
   for (const r of fetched) {
-    const [existing] = await db
-      .select({ id: reviews.id })
-      .from(reviews)
-      .where(and(eq(reviews.reviewSourceId, source.id), eq(reviews.externalReviewId, r.externalReviewId)))
-      .limit(1);
-    if (existing) {
+    if (seenExternalIds.has(r.externalReviewId)) {
       skipped++;
       continue;
     }
-    await db.insert(reviews).values({
+    // Added as we go, so a provider response that repeats the same review
+    // twice in one payload can't violate the (reviewSourceId,
+    // externalReviewId) unique index — previously the per-review SELECT
+    // happened to cover that case.
+    seenExternalIds.add(r.externalReviewId);
+    toInsert.push({
       businessId,
       reviewSourceId: source.id,
       externalReviewId: r.externalReviewId,
@@ -384,8 +399,16 @@ export async function connectGoogleReviewSource(businessId: string, businessName
       isDemoData: false,
       rawPayloadJson: null,
     });
-    imported++;
   }
+
+  // Chunked rather than one giant statement — Postgres caps bind
+  // parameters per query, and at ~9 columns a 500-review import would sit
+  // uncomfortably close to that with no benefit over a few round trips.
+  const INSERT_CHUNK_SIZE = 100;
+  for (let i = 0; i < toInsert.length; i += INSERT_CHUNK_SIZE) {
+    await db.insert(reviews).values(toInsert.slice(i, i + INSERT_CHUNK_SIZE));
+  }
+  const imported = toInsert.length;
 
   await db.update(reviewSources).set({ lastSyncedAt: new Date().toISOString() }).where(eq(reviewSources.id, source.id));
 
