@@ -5,6 +5,7 @@ import { BfcacheGuard } from "@/components/BfcacheGuard";
 import { PilotInviteForm, PilotToggleTable, PilotRow, ConnectGoogleReviewsForm } from "@/components/admin/PilotManagement";
 import { OutreachControls, OutreachQueueTable, ProspectRow } from "@/components/admin/OutreachQueue";
 import { DeleteBusinessTable, DeletableBusinessRow } from "@/components/admin/DeleteBusiness";
+import { RunAnalysisForBusiness } from "@/components/admin/RunAnalysisForBusiness";
 import { SAMPLE_REPORT_ACCOUNT_EMAIL, getReviewCountForBusiness } from "@/lib/db/queries";
 
 // Intentionally minimal per the development rule ("do NOT overbuild the
@@ -202,6 +203,13 @@ export default async function AdminPage({
                 rows={data.reviewAnalysisStatus.map((r) => [r.businessName, String(r.current), String(r.stale), String(r.total)])}
               />
             )}
+            {/* Deliberately here rather than in its own section — this is
+                the table that tells you a business is stale, so the control
+                that fixes it belongs directly underneath. Lists ALL
+                businesses, not just those with real reviews, because the
+                demo-data sample-report practice is exactly the one that
+                can't be reached any other way. */}
+            <RunAnalysisForBusiness businesses={data.businesses.map((b) => ({ id: b.id, name: b.name }))} />
           </div>
         </Section>
 
