@@ -78,10 +78,17 @@ export async function GET(req: NextRequest) {
   // dispatched. Confirmed in production: the same POST succeeded against
   // www and returned 401 through the apex redirect.
   //
-  // VERCEL_URL is this deployment's own host and never redirects, so the
-  // header survives. Falls back to the incoming request's origin, which is
-  // correct for local dev.
-  const internalBase = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : req.nextUrl.origin;
+  // Also NOT VERCEL_URL, which was the first attempt: that's the
+  // deployment-specific *.vercel.app host, and it sits behind Vercel's
+  // Deployment Protection, so it 401s before this app's own auth even
+  // runs. Verified — the failure log named it.
+  //
+  // The incoming request's origin is the one host guaranteed to serve
+  // directly, because it just served THIS request: whatever redirects or
+  // protection exist, they've already been resolved by the time the
+  // function sees it. It also needs no configuration and follows the
+  // canonical host automatically if it ever changes.
+  const internalBase = req.nextUrl.origin;
   const syncUrl = new URL("/api/cron/sync-business", internalBase).toString();
 
   // after() keeps the dispatches alive once the response has been sent —
