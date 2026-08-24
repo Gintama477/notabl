@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getAlertCandidateBusinesses, processBusinessForAlert, pickBusinessToSync, syncBusinessReviews } from "@/lib/alerts/reviewAlerts";
+import { NextRequest, NextResponse, after } from "next/server";
+import { getAlertCandidateBusinesses, processBusinessForAlert, orderBusinessesForSync } from "@/lib/alerts/reviewAlerts";
+import { denyUnauthorizedCron } from "@/lib/auth/cronAuth";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 // Runs once daily (see vercel.json) — replaces the old calendar-scheduled
 // weekly report with triggered alerts. Reviews don't arrive fast enough to
@@ -14,28 +16,26 @@ export const maxDuration = 60;
 // than risking the function getting killed mid-business.
 const CRON_BUDGET_MS = 50_000;
 
-// A sync is only STARTED if this much of the run is still unspent. One
-// Outscraper fetch has been observed taking most of the 60s ceiling on a
-// large practice, so beginning one late in the run buys nothing and
-// guarantees the function is killed. Checked before starting rather than
-// during, because the call itself can't be interrupted.
-const SYNC_START_DEADLINE_MS = 15_000;
+// Upper bound on how many sync requests one run fans out. Not expected to
+// bind at any realistic near-term customer count — it's a guard against
+// dispatching hundreds of simultaneous Outscraper calls if this grows
+// faster than anyone re-reads this file. Whatever exceeds it is simply the
+// least overdue, and leads the ordering next run.
+const MAX_SYNC_DISPATCHES_PER_RUN = 25;
+
+// Delay added per dispatch so N requests don't hit Outscraper in the same
+// instant. They still run concurrently — this only staggers their starts,
+// so the whole fan-out is spread over a couple of seconds rather than
+// serialized.
+const DISPATCH_STAGGER_MS = 250;
 
 export async function GET(req: NextRequest) {
-  // Fail closed: no secret configured means this route refuses to run at
-  // all, rather than silently trusting every caller. The owner sets
-  // CRON_SECRET in Vercel; Vercel's own cron invocations send it as
-  // `Authorization: Bearer ${CRON_SECRET}` automatically.
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    console.error("check-reviews: CRON_SECRET is not configured — refusing to run.");
-    return NextResponse.json({ error: "Not configured" }, { status: 401 });
-  }
-
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = denyUnauthorizedCron(req, "check-reviews");
+  if (denied) return denied;
+  // Guaranteed set — denyUnauthorizedCron returns a 401 when it isn't.
+  // Needed below to authenticate this route's own dispatches to the
+  // per-business sync worker.
+  const secret = process.env.CRON_SECRET as string;
 
   const candidates = await getAlertCandidateBusinesses();
   const startedAt = Date.now();
@@ -54,23 +54,60 @@ export async function GET(req: NextRequest) {
     results.push(await processBusinessForAlert(candidate));
   }
 
-  // PHASE 2 — re-import ONE business's reviews, whichever is most overdue.
-  // Deliberately last and deliberately singular: a single Outscraper fetch
-  // can consume the whole 60s function by itself (a 449-review practice
-  // did, killing this route before it logged anything). Runs only if
-  // there's real headroom left, since starting a 40-second call with 10
-  // seconds to go just guarantees a kill. Being killed here is safe — the
-  // import is resumable and every alert above has already been sent.
-  const toSync = pickBusinessToSync(candidates);
-  if (toSync && Date.now() - startedAt < SYNC_START_DEADLINE_MS) {
-    results.push(await syncBusinessReviews(toSync));
-  } else if (toSync) {
-    results.push({
-      businessId: toSync.businessId,
-      action: "sync_deferred",
-      detail: "not enough time left this run — will be the most-overdue business next run",
-    });
+  // PHASE 2 — fan out the imports instead of doing one inline.
+  //
+  // This route used to sync exactly one business itself, because a single
+  // Outscraper fetch can consume most of a 60-second function. That worked
+  // but meant with N connected businesses each got fresh Google data every
+  // N days — at 7 customers, a new 1-star review could sit unimported for
+  // a week while the landing page and the outreach email both promise the
+  // practice hears about it the same day.
+  //
+  // Now every candidate gets its own request to /api/cron/sync-business,
+  // and therefore its own fresh 60 seconds. Vercel Pro isn't the fix here:
+  // a bigger ceiling still doesn't fit as N grows, and this doesn't need
+  // one.
+  const toDispatch = orderBusinessesForSync(candidates).slice(0, MAX_SYNC_DISPATCHES_PER_RUN);
+  const syncUrl = new URL("/api/cron/sync-business", getSiteUrl()).toString();
+
+  // after() keeps the dispatches alive once the response has been sent —
+  // on Vercel it maps to waitUntil. Without it, fire-and-forget requests
+  // can be cut off when the function returns, which would look like it
+  // worked while silently importing nothing. Awaiting them here instead
+  // would make this route as slow as its slowest child, which is the
+  // problem being solved.
+  after(async () => {
+    await Promise.allSettled(
+      toDispatch.map(async (candidate, i) => {
+        // Staggered starts, not sequential runs — they still overlap, this
+        // just avoids firing every Outscraper call in the same instant.
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, i * DISPATCH_STAGGER_MS));
+        try {
+          await fetch(syncUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+            body: JSON.stringify({ businessId: candidate.businessId }),
+          });
+        } catch (err) {
+          // A failed dispatch costs this business one day of freshness and
+          // nothing else: imports dedupe on (reviewSourceId,
+          // externalReviewId) and lastSyncedAt is only written on success,
+          // so tomorrow's run picks it up as the most overdue.
+          console.error(`check-reviews: dispatch failed for ${candidate.businessId}:`, err);
+        }
+      })
+    );
+  });
+
+  for (const candidate of toDispatch) {
+    results.push({ businessId: candidate.businessId, action: "sync_dispatched" });
   }
 
-  return NextResponse.json({ ok: true, candidateCount: candidates.length, processedCount: results.length, results });
+  return NextResponse.json({
+    ok: true,
+    candidateCount: candidates.length,
+    processedCount: results.length,
+    dispatchedCount: toDispatch.length,
+    results,
+  });
 }

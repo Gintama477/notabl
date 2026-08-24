@@ -91,28 +91,28 @@ export type AlertOutcome =
   | { businessId: string; action: "error"; error: string };
 
 /**
- * Picks the ONE business to re-sync on this run: whichever went longest
- * without one (never-synced first).
+ * Orders businesses by how overdue a re-sync is — never-synced first, then
+ * longest-since-synced.
  *
- * One per run, because a single Outscraper fetch can consume the entire
- * 60-second function on its own — a 449-review practice did exactly that
- * and killed the cron before it wrote a single log line. There is no
- * budget tuning that fixes it: 60s is Vercel Hobby's hard ceiling, so the
- * only option is doing less per request.
+ * Every candidate now gets synced on every daily run: the cron dispatches
+ * one request per business to /api/cron/sync-business, each landing in its
+ * own fresh 60-second function (see app/api/cron/check-reviews/route.ts).
+ * A single Outscraper fetch can consume most of one function on its own,
+ * which is why the work is fanned out rather than done inline — but it is
+ * no longer one business per DAY, only one business per FUNCTION.
  *
- * The trade-off, stated plainly: with N connected businesses each gets
- * fresh Google data every N days rather than daily. Alerts still run daily
- * for everyone against already-imported data. If N grows enough for that
- * lag to matter, this needs a real queue rather than a bigger budget.
+ * This ordering therefore isn't a rotation any more; it only decides who
+ * goes first, and who survives the per-run dispatch cap if a very large
+ * number of businesses ever connect. Most overdue first means that cap,
+ * if it ever binds, still degrades fairly.
  */
-export function pickBusinessToSync(candidates: AlertCandidate[]): AlertCandidate | null {
-  if (candidates.length === 0) return null;
+export function orderBusinessesForSync(candidates: AlertCandidate[]): AlertCandidate[] {
   return [...candidates].sort((a, b) => {
     if (a.lastSyncedAt === b.lastSyncedAt) return 0;
     if (a.lastSyncedAt === null) return -1;
     if (b.lastSyncedAt === null) return 1;
     return a.lastSyncedAt < b.lastSyncedAt ? -1 : 1;
-  })[0];
+  });
 }
 
 /**
