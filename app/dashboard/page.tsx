@@ -89,17 +89,16 @@ export default async function DashboardPage() {
   // renders the honest empty state rather than stale boilerplate.
   const opportunities = data.latestReport ? JSON.parse(data.latestReport.opportunitiesJson ?? "[]") : [];
 
-  // What the right-hand column shows, in strict priority order:
-  //   1. genuinely negative theme mentions -> "What Patients Dislike"
-  //   2. otherwise, real reviews below 4 stars -> "Reviews Worth Your
-  //      Attention", verbatim, with a reply button
-  //   3. otherwise, one honest line saying nothing needs attention
+  // Both the negative-theme card and the low-rated-review card now always
+  // render, each with its own honest empty state, rather than one
+  // substituting for the other depending on the data. They answer
+  // different questions — "what do patients complain about repeatedly"
+  // versus "which specific reviews need a reply" — and swapping them
+  // around made the page rearrange itself between businesses.
   //
-  // There is deliberately no fourth option that reframes praise as a
-  // weakness — see the comment on WhatPatientsDislike in
-  // components/dashboard/Sections.tsx for the version that did and why it
-  // was wrong.
-  const hasNegativeThemes = topNegativeThemes.length > 0;
+  // There is still deliberately nothing that reframes praise as a
+  // weakness; see the comment on WhatPatientsDislike in
+  // components/dashboard/Sections.tsx for the version that did.
 
   // A couple of real, verbatim quotes per theme, keyed by sentiment — the
   // business's whole current analysis, not just its latest run (see
@@ -107,10 +106,7 @@ export default async function DashboardPage() {
   // business with nothing analyzed yet, so no latestRun guard is needed here.
   const excerptsByTheme = await getThemeExcerptsForBusiness(business.id, 2);
 
-  // Only fetched when it's actually what the right-hand column will show
-  // (priority 2 above) — no point querying for a practice whose negative
-  // themes already fill that slot.
-  const reviewsNeedingAttention = hasNegativeThemes ? [] : await getReviewsNeedingAttention(business.id);
+  const reviewsNeedingAttention = await getReviewsNeedingAttention(business.id);
   // Null on demo data, where there's no connected Google listing to send
   // anyone to; DraftReplyButton handles that by omitting its "Find it on
   // Google" link.
@@ -290,29 +286,47 @@ export default async function DashboardPage() {
                       dead space is what made the page read as broken rather
                       than as "this practice is doing well." Same reasoning
                       applies uniformly to the other paired rows below. */}
+                  {/*
+                    Grouped by what each card MEANS, and in fixed positions.
+                    Cards used to swap slots depending on the data — "Reviews
+                    Worth Your Attention" took the Dislike column whenever a
+                    practice had no negative themes — so the page rearranged
+                    itself between businesses and read as unorganized. Every
+                    card now has one home: the two strengths together, the two
+                    problem views together, then the raw reviews, then what to
+                    do about it.
+                  */}
                   <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
                     <WhatPatientsLove items={topPositiveThemes} excerptsByTheme={excerptsByTheme} />
-                    {/* Priority order, see hasNegativeThemes above: real
-                        complaints if there are any, otherwise the real
-                        below-4-star reviews, otherwise one honest line. */}
-                    {hasNegativeThemes ? (
-                      <WhatPatientsDislike items={topNegativeThemes} excerptsByTheme={excerptsByTheme} />
-                    ) : (
-                      <LowRatedReviewsCard
-                        reviews={reviewsNeedingAttention}
-                        googleReviewsUrl={googleReviewsUrl}
-                        totalReviews={data.totalReviews}
-                      />
-                    )}
+                    <Opportunities items={opportunities} excerptsByTheme={excerptsByTheme} />
+                  </div>
+
+                  <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+                    <WhatPatientsDislike
+                      items={topNegativeThemes}
+                      totalReviews={data.totalReviews}
+                      excerptsByTheme={excerptsByTheme}
+                    />
+                    <IssuesGettingWorse rollups={data.rollups} excerptsByTheme={excerptsByTheme} />
+                  </div>
+
+                  {/*
+                    FULL WIDTH, and that's the point. This is the only card
+                    that expands on click, and in a two-column grid expanding
+                    it stretched the row while its neighbour stayed short —
+                    leaving half the page blank. Full width means there is no
+                    neighbour to strand.
+                  */}
+                  <div className="mt-8">
+                    <LowRatedReviewsCard
+                      reviews={reviewsNeedingAttention}
+                      googleReviewsUrl={googleReviewsUrl}
+                      totalReviews={data.totalReviews}
+                    />
                   </div>
 
                   <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
                     <NewThisWeek reviews={newReviews} />
-                    <IssuesGettingWorse rollups={data.rollups} excerptsByTheme={excerptsByTheme} />
-                  </div>
-
-                  <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
-                    <Opportunities items={opportunities} excerptsByTheme={excerptsByTheme} />
                     <RecommendedActions items={recommendedActions} />
                   </div>
                 </>

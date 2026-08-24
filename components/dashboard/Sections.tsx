@@ -102,9 +102,27 @@ export function WhatPatientsLove({ items, excerptsByTheme }: { items: ThemeRef[]
 // is noise dressed as insight, and it put positive quotes under a
 // negative-sounding heading, the exact confusion the sentiment-bucketing
 // work existed to remove. Never label praise as a weakness here.
-export function WhatPatientsDislike({ items, excerptsByTheme }: { items: ThemeRef[]; excerptsByTheme?: ExcerptsByTheme }) {
+export function WhatPatientsDislike({
+  items,
+  totalReviews,
+  excerptsByTheme,
+}: {
+  items: ThemeRef[];
+  totalReviews: number;
+  excerptsByTheme?: ExcerptsByTheme;
+}) {
   return (
-    <SectionCard title="What Patients Dislike" accent="text-red-800" empty={items.length === 0}>
+    <SectionCard
+      title="What Patients Dislike"
+      accent="text-red-800"
+      empty={items.length === 0}
+      // Scoped to THEMES on purpose. It's about complaints that recur
+      // across reviews, which is a different claim from "no individual
+      // review needs a reply" — that one belongs to the Reviews Worth Your
+      // Attention card, and both can now be true at once without the two
+      // messages saying the same thing.
+      emptyMessage={`No recurring complaints found across ${totalReviews} review${totalReviews === 1 ? "" : "s"}.`}
+    >
       {items.map((t) => (
         <div key={t.category} className="border-l-2 border-red-600 pl-3">
           <p className="text-sm font-medium text-slate-800">{THEME_LABELS[t.category]}</p>

@@ -58,21 +58,32 @@ export function LowRatedReviewsCard({
       // not filler, and not a vague phrase. Reached only when there are
       // also no negative themes (see app/dashboard/page.tsx), so it can
       // honestly claim both at once.
-      emptyMessage={`No complaints and no reviews below 4 stars across ${totalReviews} review${totalReviews === 1 ? "" : "s"}. Nothing needs your attention right now.`}
+      // Narrowed to what THIS card actually knows. It used to also claim
+      // "no complaints", which now overlaps with the What Patients Dislike
+      // card's own empty state sitting just above it — two cards asserting
+      // the same thing in different words.
+      emptyMessage={`No reviews below 4 stars across ${totalReviews} review${totalReviews === 1 ? "" : "s"}. Nothing needs a reply right now.`}
     >
-      {visible.map((r) => (
-        <div key={r.id} className="rounded-md border border-slate-200 p-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>{r.authorName?.trim() || "Anonymous"}</span>
-            <span>
-              {"★".repeat(r.rating)}
-              {"☆".repeat(Math.max(0, 5 - r.rating))} · {fmtDate(r.reviewDate)}
-            </span>
+      {/* Expanded, this scrolls inside its own box rather than growing the
+          page indefinitely — a practice with 15 low-rated reviews would
+          otherwise push everything below it far off screen. Collapsed
+          (3 reviews) it never reaches the cap, so the box behaves as a
+          plain list and no scrollbar appears. */}
+      <div className={expanded ? "max-h-[32rem] space-y-3 overflow-y-auto pr-1" : "space-y-3"}>
+        {visible.map((r) => (
+          <div key={r.id} className="rounded-md border border-slate-200 p-4">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>{r.authorName?.trim() || "Anonymous"}</span>
+              <span>
+                {"★".repeat(r.rating)}
+                {"☆".repeat(Math.max(0, 5 - r.rating))} · {fmtDate(r.reviewDate)}
+              </span>
+            </div>
+            <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{formatReviewText(r.reviewText)}</p>
+            <DraftReplyButton reviewId={r.id} googleReviewsUrl={googleReviewsUrl} />
           </div>
-          <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{formatReviewText(r.reviewText)}</p>
-          <DraftReplyButton reviewId={r.id} googleReviewsUrl={googleReviewsUrl} />
-        </div>
-      ))}
+        ))}
+      </div>
       {hasMore && (
         <button
           type="button"
