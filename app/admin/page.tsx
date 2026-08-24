@@ -60,6 +60,8 @@ export default async function AdminPage({
     googleRating: p.googleRating,
     googleReviewCount: p.googleReviewCount,
     contactEmail: p.contactEmail,
+    emailValidationStatus: p.emailValidationStatus,
+    emailValidationReason: p.emailValidationReason,
     emailSubject: p.emailSubject,
     emailBody: p.emailBody,
     status: p.status,

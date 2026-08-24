@@ -31,6 +31,7 @@ import { DEFAULT_PLAN, PLANS } from "@/config/pricing";
 import { slugifyBusinessName, randomSlugSuffix } from "@/lib/reviews/slug";
 import { getAIProvider } from "@/lib/ai/provider";
 import { findProspects } from "@/lib/outreach/findProspects";
+import { createMxCache, validateProspectEmail } from "@/lib/outreach/validateEmail";
 import { fetchDomainEmails, pickBestEmail, hostnameOf } from "@/lib/outreach/findEmail";
 import { buildOutreachEmailSubject, buildOutreachDraftBody, buildOutreachEmailHtml, buildOutreachEmailText } from "@/lib/email/templates/outreachEmail";
 import { sendOutreachEmail } from "@/lib/email/send";
@@ -1107,6 +1108,12 @@ export async function findAndDraftProspects(opts: {
     maxReviewCount: opts.maxReviewCount,
   });
 
+  // Validated before insert, so junk never enters the queue in the first
+  // place. One MX cache for the whole batch — a practice group with twenty
+  // listings on one domain costs one DNS lookup.
+  const mx = createMxCache();
+  const blockedAddresses = await getBlockedOutreachAddresses();
+
   let added = 0;
   let alreadyExisted = 0;
   for (const p of found) {
@@ -1127,7 +1134,11 @@ export async function findAndDraftProspects(opts: {
       senderName: opts.senderName,
     });
 
+    const validation = await validateProspectEmail(p.contactEmail, { mx, blockedAddresses });
+
     await db.insert(prospects).values({
+      emailValidationStatus: validation.status,
+      emailValidationReason: validation.reason,
       businessName: p.businessName,
       website: p.website,
       phone: p.phone,
@@ -1189,6 +1200,87 @@ export async function redraftDraftedProspects(opts: { sampleReportUrl: string; s
   }
 
   return { redrafted: rows.length };
+}
+
+/**
+ * Every address that must never receive cold outreach: our own sender and
+ * reply-to addresses, plus every Notabl account email. An account email
+ * belongs either to us or to an existing customer, and cold-pitching
+ * either is a plain bug — the owner's own address appeared twice in the
+ * first real prospect batch.
+ */
+async function getBlockedOutreachAddresses(): Promise<Set<string>> {
+  const accountRows = await db.select({ email: accounts.email }).from(accounts);
+  const blocked = accountRows.map((a) => a.email);
+  for (const envAddress of [
+    process.env.OUTREACH_FROM_ADDRESS,
+    process.env.OUTREACH_REPLY_TO_ADDRESS,
+    process.env.EMAIL_FROM_ADDRESS,
+    process.env.REPLY_TO_ADDRESS,
+  ]) {
+    if (envAddress) blocked.push(envAddress);
+  }
+  return new Set(blocked.map((e) => e.trim().toLowerCase()));
+}
+
+/** Addresses attached to more than one prospect — see validateProspectEmail. */
+async function getDuplicateProspectAddresses(): Promise<Set<string>> {
+  const rows = await db.select({ contactEmail: prospects.contactEmail }).from(prospects);
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.contactEmail) continue;
+    const key = r.contactEmail.trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([email]) => email));
+}
+
+export type VerifyEmailsResult = {
+  checked: number;
+  valid: number;
+  flagged: number;
+  invalid: number;
+  domainsLookedUp: number;
+};
+
+/**
+ * Re-validates prospects already in the queue, so an existing list can be
+ * cleaned without re-running discovery (which costs billed Outscraper
+ * calls). Skips rows already sent — their outcome is history, and
+ * relabelling it would rewrite the record.
+ *
+ * Bounded by `limit` rather than doing the whole table, because MX lookups
+ * are network calls and this runs inside one request. The caller passes a
+ * batch size that fits its budget; unchecked rows simply lead the next
+ * pass. Same rule as everywhere else: one request does a bounded amount of
+ * work.
+ */
+export async function verifyProspectEmails(limit = 200): Promise<VerifyEmailsResult> {
+  const [blockedAddresses, duplicateAddresses] = await Promise.all([
+    getBlockedOutreachAddresses(),
+    getDuplicateProspectAddresses(),
+  ]);
+  const mx = createMxCache();
+
+  const rows = await db
+    .select()
+    .from(prospects)
+    .where(and(ne(prospects.status, "sent"), ne(prospects.status, "demo_sent")))
+    .limit(limit);
+
+  const tally = { checked: 0, valid: 0, flagged: 0, invalid: 0 };
+
+  for (const row of rows) {
+    const result = await validateProspectEmail(row.contactEmail, { mx, blockedAddresses, duplicateAddresses });
+    await db
+      .update(prospects)
+      .set({ emailValidationStatus: result.status, emailValidationReason: result.reason })
+      .where(eq(prospects.id, row.id));
+    tally.checked++;
+    tally[result.status]++;
+  }
+
+  return { ...tally, domainsLookedUp: mx.size };
 }
 
 export async function getProspects() {
@@ -1259,6 +1351,16 @@ export async function sendProspectEmail(id: string) {
   }
   if (prospect.status === "skipped") throw new Error("This prospect was skipped.");
   if (!prospect.contactEmail) throw new Error("No contact email set for this prospect yet.");
+  // The backstop. The queue hides invalid rows and the bulk action skips
+  // them, but this is the check that actually holds: a send refused here
+  // cannot be talked into happening by any UI state, a stale page, or a
+  // hand-crafted request. Sending to addresses that fail validation is
+  // what took the first batch to a ~20% bounce rate, and bounce rate is
+  // charged against the whole domain — including the alert emails paying
+  // customers depend on.
+  if (prospect.emailValidationStatus === "invalid") {
+    throw new Error(`Address failed validation (${prospect.emailValidationReason ?? "invalid"}) — refusing to send.`);
+  }
   if (!prospect.emailSubject || !prospect.emailBody) throw new Error("Prospect is missing a drafted subject/body.");
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

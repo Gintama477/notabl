@@ -14,6 +14,8 @@ export type ProspectRow = {
   googleRating: number | null;
   googleReviewCount: number | null;
   contactEmail: string | null;
+  emailValidationStatus: string | null;
+  emailValidationReason: string | null;
   emailSubject: string | null;
   emailBody: string | null;
   status: string;
@@ -405,6 +407,16 @@ function isActionable(row: ProspectRow): boolean {
 }
 
 /**
+ * Invalid addresses are excluded from bulk selection entirely — visibly,
+ * with the reason shown on the row, rather than silently dropped at send
+ * time. sendProspectEmail refuses them regardless; this just stops anyone
+ * queueing up a send that's going to be refused.
+ */
+function isSendable(row: ProspectRow): boolean {
+  return isActionable(row) && row.emailValidationStatus !== "invalid";
+}
+
+/**
  * Runs an async task over items with limited concurrency, reporting after
  * each completion.
  *
@@ -429,7 +441,7 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<null | "finding" | "sending">(null);
+  const [busy, setBusy] = useState<null | "finding" | "sending" | "verifying">(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
 
@@ -438,8 +450,10 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   }
 
   const groups = groupProspectsByCity(rows);
-  const actionable = rows.filter(isActionable);
+  const actionable = rows.filter(isSendable);
   const selectedRows = actionable.filter((r) => selected.has(r.id));
+  const invalidCount = rows.filter((r) => isActionable(r) && r.emailValidationStatus === "invalid").length;
+  const uncheckedCount = rows.filter((r) => isActionable(r) && !r.emailValidationStatus).length;
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -448,6 +462,27 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
       else next.add(id);
       return next;
     });
+  }
+
+  async function verifyEmails() {
+    setBusy("verifying");
+    setSummary(null);
+    try {
+      const res = await fetch("/api/admin/outreach/verify-emails", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSummary(data?.error || "Verification failed.");
+      } else {
+        setSummary(
+          `Checked ${data.checked} address(es) across ${data.domainsLookedUp} domain(s): ${data.valid} valid, ${data.flagged} flagged for review, ${data.invalid} invalid and blocked from sending.`
+        );
+        router.refresh();
+      }
+    } catch {
+      setSummary("Verification failed.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function findEmailsForSelected() {
@@ -588,6 +623,16 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
 
         <button
           type="button"
+          onClick={verifyEmails}
+          disabled={busy !== null}
+          title="Re-check every queued address: syntax, MX records, role/form-handler patterns, our own addresses, and duplicates"
+          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {busy === "verifying" ? "Verifying…" : "Verify emails"}
+        </button>
+
+        <button
+          type="button"
           onClick={findEmailsForSelected}
           disabled={busy !== null || selectedRows.length === 0}
           className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -614,6 +659,8 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
         <span className="w-full text-xs text-slate-400">
           Every prospect gets their own individual email — never CC&apos;d or BCC&apos;d together. Sends stop
           automatically at the daily cap.
+          {invalidCount > 0 && ` ${invalidCount} address(es) failed validation and can't be selected.`}
+          {uncheckedCount > 0 && ` ${uncheckedCount} not checked yet — run Verify emails first.`}
         </span>
       </div>
 
@@ -642,7 +689,7 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
                 expanded={expandedId === r.id}
                 onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
                 onChanged={() => router.refresh()}
-                selectable={isActionable(r)}
+                selectable={isSendable(r)}
                 selected={selected.has(r.id)}
                 onSelectChange={() => toggle(r.id)}
                 disabled={busy !== null}
@@ -845,7 +892,26 @@ function ProspectRowItem({
               whether a row can be sent at all. */}
           <p className="mt-0.5 text-xs">
             {row.contactEmail ? (
-              <span className="text-slate-600">{row.contactEmail}</span>
+              <>
+                <span className="text-slate-600">{row.contactEmail}</span>
+                {/* Status and REASON together — "invalid" alone doesn't
+                    tell you whether to fix the address or drop the
+                    prospect. */}
+                {row.emailValidationStatus === "invalid" && (
+                  <span className="ml-2 rounded bg-red-50 px-1.5 py-0.5 font-medium text-red-700">
+                    Invalid — {row.emailValidationReason}
+                  </span>
+                )}
+                {row.emailValidationStatus === "flagged" && (
+                  <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800">
+                    Review — {row.emailValidationReason}
+                  </span>
+                )}
+                {row.emailValidationStatus === "valid" && (
+                  <span className="ml-2 text-teal-700">Validated</span>
+                )}
+                {!row.emailValidationStatus && <span className="ml-2 text-slate-400">Not checked</span>}
+              </>
             ) : (
               <span className="text-amber-700">
                 No contact email yet{row.website ? "" : " — and no website to look one up from"}

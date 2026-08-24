@@ -382,6 +382,13 @@ export const prospects = pgTable(
     googleRating: doublePrecision("google_rating"),
     googleReviewCount: integer("google_review_count"),
     contactEmail: text("contact_email"),
+    // "valid" | "flagged" | "invalid", from lib/outreach/validateEmail.ts.
+    // Null means never checked — rows created before validation existed.
+    // sendProspectEmail refuses "invalid" regardless of what any UI shows;
+    // "flagged" is sendable after a human looks at it (info@ is often the
+    // only address a small practice publishes).
+    emailValidationStatus: text("email_validation_status"),
+    emailValidationReason: text("email_validation_reason"),
     emailSubject: text("email_subject"),
     emailBody: text("email_body"),
     status: text("status").notNull().default("drafted"),
