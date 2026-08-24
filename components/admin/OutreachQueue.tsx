@@ -629,7 +629,15 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
           <div className="divide-y divide-slate-100">
             {group.rows.map((r) => (
               <ProspectRowItem
-                key={r.id}
+                // Key includes the editable values, not just the id, so a
+                // row REMOUNTS when the server sends different ones.
+                // ProspectRowItem seeds its inputs with useState(row.…),
+                // which runs only on first mount — after router.refresh()
+                // React reused the instance and the fields kept their old
+                // values. That's why bulk "Find emails" saved addresses
+                // correctly but left the field looking empty, and it hid
+                // re-drafted subject/body text the same way.
+                key={`${r.id}:${r.contactEmail ?? ""}:${r.emailSubject ?? ""}:${r.emailBody ?? ""}`}
                 row={r}
                 expanded={expandedId === r.id}
                 onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
@@ -829,6 +837,20 @@ function ProspectRowItem({
               ? `${row.googleRating.toFixed(1)} ★ · ${row.googleReviewCount ?? 0} reviews · `
               : "No rating · "}
             {statusLabel(row.status)}
+          </p>
+          {/* Shown on the collapsed row, not only inside the editor. After
+              a bulk lookup over forty prospects, having to expand each one
+              to find out whether it worked defeats the point of doing them
+              in bulk — and an address is also the one thing that decides
+              whether a row can be sent at all. */}
+          <p className="mt-0.5 text-xs">
+            {row.contactEmail ? (
+              <span className="text-slate-600">{row.contactEmail}</span>
+            ) : (
+              <span className="text-amber-700">
+                No contact email yet{row.website ? "" : " — and no website to look one up from"}
+              </span>
+            )}
           </p>
           {row.skipReason && row.status === "skipped" && (
             <p className="mt-0.5 text-xs text-slate-400">Reason: {row.skipReason}</p>
