@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { getAlertCandidateBusinesses, processBusinessForAlert, orderBusinessesForSync } from "@/lib/alerts/reviewAlerts";
 import { denyUnauthorizedCron } from "@/lib/auth/cronAuth";
-import { getSiteUrl } from "@/lib/siteUrl";
+import { db } from "@/lib/db/client";
+import { automationLogs } from "@/lib/db/schema.pg";
 
 // Runs once daily (see vercel.json) — replaces the old calendar-scheduled
 // weekly report with triggered alerts. Reviews don't arrive fast enough to
@@ -68,7 +69,20 @@ export async function GET(req: NextRequest) {
   // a bigger ceiling still doesn't fit as N grows, and this doesn't need
   // one.
   const toDispatch = orderBusinessesForSync(candidates).slice(0, MAX_SYNC_DISPATCHES_PER_RUN);
-  const syncUrl = new URL("/api/cron/sync-business", getSiteUrl()).toString();
+
+  // Deliberately NOT getSiteUrl(). That returns the public canonical host
+  // (https://trynotabl.com), which 308-redirects to www — and fetch DROPS
+  // the Authorization header across an origin change, by design. Every
+  // dispatch therefore arrived at the worker unauthenticated, was rejected
+  // 401, and did nothing, while this route still reported them as
+  // dispatched. Confirmed in production: the same POST succeeded against
+  // www and returned 401 through the apex redirect.
+  //
+  // VERCEL_URL is this deployment's own host and never redirects, so the
+  // header survives. Falls back to the incoming request's origin, which is
+  // correct for local dev.
+  const internalBase = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : req.nextUrl.origin;
+  const syncUrl = new URL("/api/cron/sync-business", internalBase).toString();
 
   // after() keeps the dispatches alive once the response has been sent —
   // on Vercel it maps to waitUntil. Without it, fire-and-forget requests
@@ -83,11 +97,27 @@ export async function GET(req: NextRequest) {
         // just avoids firing every Outscraper call in the same instant.
         if (i > 0) await new Promise((resolve) => setTimeout(resolve, i * DISPATCH_STAGGER_MS));
         try {
-          await fetch(syncUrl, {
+          const res = await fetch(syncUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
             body: JSON.stringify({ businessId: candidate.businessId }),
           });
+          if (!res.ok) {
+            // Recorded, not just console-logged. This whole path failed
+            // silently once — the response is already sent by the time
+            // these run, so a bad status has nowhere to surface unless it
+            // is written down. It shows up in the admin panel's automation
+            // log, which is where anyone would actually look.
+            const detail = `Sync dispatch for "${candidate.businessName}" returned ${res.status} from ${syncUrl}.`;
+            console.error(`check-reviews: ${detail}`);
+            await db.insert(automationLogs).values({
+              jobName: "check-reviews-dispatch",
+              businessId: candidate.businessId,
+              status: "failed",
+              detail,
+              finishedAt: new Date().toISOString(),
+            });
+          }
         } catch (err) {
           // A failed dispatch costs this business one day of freshness and
           // nothing else: imports dedupe on (reviewSourceId,
