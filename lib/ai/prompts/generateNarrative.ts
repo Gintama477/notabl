@@ -144,6 +144,9 @@ Operational suggestions only, same as "recommendedActions": how the
 practice communicates, schedules, or presents itself — never anything
 clinical.
 
+Keep every "summary" field in this report under 300 characters, including
+these. Two tight sentences, not a paragraph.
+
 BAD example (generic filler, do not write like this): "Praised in 34
 reviews overall — consider highlighting this in your marketing."
 GOOD example (specific, tied to the data): "Staff friendliness has 34

@@ -34,6 +34,20 @@ export interface AIProvider {
   draftReply(reviewText: string, rating: number, businessName: string): Promise<string>;
 }
 
+// Per-review extraction and reply drafting return small objects; 1024 is
+// ample and keeps them cheap.
+const SMALL_RESPONSE_MAX_TOKENS = 1024;
+
+// The narrative is a different shape entirely: an executive summary plus
+// FOUR arrays of theme references, a changes list, and recommended
+// actions. At 1024 it truncated mid-JSON — the response simply stopped,
+// leaving unparseable output, and the failure surfaced as
+// "SyntaxError: Expected ',' or ']' after array element at position 4356"
+// rather than anything resembling a token limit. It had been borderline
+// for a while; adding "opportunities" pushed it over. Sized with real
+// headroom so a wordy report for a practice with many themes still fits.
+const NARRATIVE_MAX_TOKENS = 4096;
+
 class ClaudeProvider implements AIProvider {
   name = "claude-sonnet";
   promptVersion = EXTRACT_REVIEW_PROMPT_VERSION;
@@ -43,10 +57,10 @@ class ClaudeProvider implements AIProvider {
     this.client = new Anthropic({ apiKey });
   }
 
-  private async callOnce(prompt: string): Promise<unknown> {
+  private async callOnce(prompt: string, maxTokens: number): Promise<unknown> {
     const msg = await this.client.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
     const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
@@ -65,13 +79,13 @@ class ClaudeProvider implements AIProvider {
   // wouldn't reliably help here on its own. If 429s persist even with
   // this, the fix is a lower BATCH_SIZE in runAnalysis.ts, not a longer
   // delay here.
-  private async callJson(prompt: string): Promise<unknown> {
+  private async callJson(prompt: string, maxTokens = SMALL_RESPONSE_MAX_TOKENS): Promise<unknown> {
     try {
-      return await this.callOnce(prompt);
+      return await this.callOnce(prompt, maxTokens);
     } catch (err) {
       if (err instanceof Anthropic.RateLimitError) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        return await this.callOnce(prompt);
+        return await this.callOnce(prompt, maxTokens);
       }
       throw err;
     }
@@ -83,7 +97,7 @@ class ClaudeProvider implements AIProvider {
   }
 
   async generateNarrative(structuredRollupJson: string, businessName: string): Promise<WeeklyNarrative> {
-    const raw = await this.callJson(buildNarrativePrompt(structuredRollupJson, businessName));
+    const raw = await this.callJson(buildNarrativePrompt(structuredRollupJson, businessName), NARRATIVE_MAX_TOKENS);
     return WeeklyNarrativeSchema.parse(raw);
   }
 

@@ -52,7 +52,14 @@ export const NarrativeActionSchema = z.object({
 
 export const NarrativeThemeRefSchema = z.object({
   category: z.enum(THEME_CATEGORIES),
-  summary: z.string().max(300),
+  // 500, not 300. This is a sanity bound against runaway output, not a
+  // design constraint — and at 300 it was rejecting legitimate results:
+  // "opportunities" entries are explicitly asked for as one or two
+  // sentences with specifics and a suggested use, which runs longer than
+  // the one-line summaries the other lists get. A schema failure here
+  // costs the ENTIRE narrative (both attempts, then the whole run), so
+  // the bound has to sit above what the prompt actually asks for.
+  summary: z.string().max(500),
 });
 
 export const WeeklyNarrativeSchema = z.object({
