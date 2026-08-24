@@ -399,18 +399,224 @@ function groupProspectsByCity(rows: ProspectRow[]) {
     });
 }
 
+/** Rows that can still be acted on — anything sent, demo-sent or skipped is done. */
+function isActionable(row: ProspectRow): boolean {
+  return row.status !== "sent" && row.status !== "demo_sent" && row.status !== "skipped";
+}
+
+/**
+ * Runs an async task over items with limited concurrency, reporting after
+ * each completion.
+ *
+ * Used for the bulk email lookup, where each request takes ~45 seconds:
+ * fully sequential, forty prospects would take half an hour, and firing
+ * all forty at once would hammer Outscraper and hold forty serverless
+ * functions open. Three at a time is the compromise.
+ */
+async function runPool<T>(items: T[], concurrency: number, task: (item: T) => Promise<void>, onDone: () => void) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const item = items[cursor++];
+      await task(item);
+      onDone();
+    }
+  });
+  await Promise.all(workers);
+}
+
 export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<null | "finding" | "sending">(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
 
   if (rows.length === 0) {
     return <p className="p-4 text-sm text-slate-400">No prospects yet — use the form above to find some.</p>;
   }
 
   const groups = groupProspectsByCity(rows);
+  const actionable = rows.filter(isActionable);
+  const selectedRows = actionable.filter((r) => selected.has(r.id));
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function findEmailsForSelected() {
+    const targets = selectedRows.filter((r) => r.website);
+    if (targets.length === 0) {
+      setSummary("None of the selected prospects have a website to look up an email from.");
+      return;
+    }
+    setBusy("finding");
+    setSummary(null);
+    setProgress({ done: 0, total: targets.length });
+    let found = 0;
+    let missed = 0;
+    let done = 0;
+
+    await runPool(
+      targets,
+      3,
+      async (row) => {
+        try {
+          const res = await fetch("/api/admin/outreach/find-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // save: the whole point of bulk — clicking Save on forty rows
+            // by hand is the work being removed.
+            body: JSON.stringify({ prospectId: row.id, save: true }),
+          });
+          const data = await res.json().catch(() => null);
+          if (res.ok && data?.email) found++;
+          else missed++;
+        } catch {
+          missed++;
+        }
+      },
+      () => setProgress({ done: ++done, total: targets.length })
+    );
+
+    setBusy(null);
+    setProgress(null);
+    const noSite = selectedRows.length - targets.length;
+    setSummary(
+      `Found ${found} email${found === 1 ? "" : "s"}, ${missed} not found${noSite > 0 ? `, ${noSite} skipped (no website)` : ""}. Review them below before sending.`
+    );
+    router.refresh();
+  }
+
+  async function sendSelected() {
+    const sendable = selectedRows.filter((r) => r.contactEmail);
+    const missingEmail = selectedRows.length - sendable.length;
+    if (sendable.length === 0) {
+      setSummary("None of the selected prospects have a contact email yet — find their emails first.");
+      return;
+    }
+    if (
+      !confirm(
+        `Send ${sendable.length} separate email${sendable.length === 1 ? "" : "s"}?\n\n` +
+          `Each prospect receives their own individual email — nobody is CC'd or BCC'd, and no recipient can see any other.\n\n` +
+          `This can't be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setBusy("sending");
+    setSummary(null);
+    setProgress({ done: 0, total: sendable.length });
+    let sent = 0;
+    let failed = 0;
+    let stoppedReason: string | null = null;
+
+    // Strictly sequential, one request per prospect. Each POST calls
+    // sendProspectEmail for a single id, which issues one Resend send with
+    // a single `to:` — there is no code path that batches recipients. It
+    // also lets the daily send cap stop the run at the exact right point
+    // rather than after a burst of parallel sends has already gone out.
+    for (const row of sendable) {
+      try {
+        const res = await fetch("/api/admin/outreach/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prospectId: row.id }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok) {
+          sent++;
+        } else {
+          failed++;
+          const message: string = data?.error || "";
+          // The daily cap is a deliberate stop, not a failure to retry
+          // past — every remaining send would hit it too.
+          if (message.toLowerCase().includes("cap")) {
+            stoppedReason = message;
+            break;
+          }
+        }
+      } catch {
+        failed++;
+      }
+      setProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+    }
+
+    setBusy(null);
+    setProgress(null);
+    setSelected(new Set());
+    setSummary(
+      [
+        `Sent ${sent} individual email${sent === 1 ? "" : "s"}.`,
+        failed > 0 ? `${failed} failed.` : "",
+        missingEmail > 0 ? `${missingEmail} skipped (no contact email).` : "",
+        stoppedReason ? `Stopped early: ${stoppedReason}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    router.refresh();
+  }
 
   return (
     <div>
+      {/* Bulk bar. Sticky above the groups so the selection count and the
+          actions stay reachable while scrolling a long queue. */}
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={actionable.length > 0 && selectedRows.length === actionable.length}
+            // Indeterminate isn't expressible in JSX, so a partial
+            // selection just shows unchecked; the count beside it is the
+            // real signal.
+            onChange={(e) => setSelected(e.target.checked ? new Set(actionable.map((r) => r.id)) : new Set())}
+            disabled={busy !== null}
+            className="h-4 w-4"
+          />
+          Select all unsent ({actionable.length})
+        </label>
+
+        <span className="text-sm font-medium text-slate-900">{selectedRows.length} selected</span>
+
+        <button
+          type="button"
+          onClick={findEmailsForSelected}
+          disabled={busy !== null || selectedRows.length === 0}
+          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {busy === "finding" ? "Finding emails…" : `Find emails (${selectedRows.length})`}
+        </button>
+
+        <button
+          type="button"
+          onClick={sendSelected}
+          disabled={busy !== null || selectedRows.length === 0}
+          className="rounded-md bg-teal-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+        >
+          {busy === "sending" ? "Sending…" : `Send ${selectedRows.length} separate emails`}
+        </button>
+
+        {progress && (
+          <span className="text-xs text-slate-500">
+            {progress.done} of {progress.total}
+            {busy === "finding" ? " looked up (~45s each, 3 at a time)" : " sent"}
+          </span>
+        )}
+        {summary && <span className="text-xs text-slate-600">{summary}</span>}
+        <span className="w-full text-xs text-slate-400">
+          Every prospect gets their own individual email — never CC&apos;d or BCC&apos;d together. Sends stop
+          automatically at the daily cap.
+        </span>
+      </div>
+
       {groups.map((group) => (
         <div key={group.label}>
           {/* Sticky so the city stays visible while scrolling a long group —
@@ -428,6 +634,10 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
                 expanded={expandedId === r.id}
                 onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
                 onChanged={() => router.refresh()}
+                selectable={isActionable(r)}
+                selected={selected.has(r.id)}
+                onSelectChange={() => toggle(r.id)}
+                disabled={busy !== null}
               />
             ))}
           </div>
@@ -442,11 +652,21 @@ function ProspectRowItem({
   expanded,
   onToggle,
   onChanged,
+  selectable,
+  selected,
+  onSelectChange,
+  disabled,
 }: {
   row: ProspectRow;
   expanded: boolean;
   onToggle: () => void;
   onChanged: () => void;
+  /** False for sent/demo-sent/skipped rows — nothing left to do to them. */
+  selectable: boolean;
+  selected: boolean;
+  onSelectChange: () => void;
+  /** True while a bulk run is in flight, so rows can't be re-selected mid-run. */
+  disabled: boolean;
 }) {
   const [contactEmail, setContactEmail] = useState(row.contactEmail ?? "");
   const [subject, setSubject] = useState(row.emailSubject ?? "");
@@ -583,6 +803,21 @@ function ProspectRowItem({
   return (
     <div className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-start gap-3">
+          {/* Only on rows still awaiting a send. A checkbox beside an
+              already-sent prospect would imply it could be sent again. */}
+          {selectable ? (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onSelectChange}
+              disabled={disabled}
+              aria-label={`Select ${row.businessName}`}
+              className="mt-1 h-4 w-4 shrink-0"
+            />
+          ) : (
+            <span aria-hidden className="mt-1 h-4 w-4 shrink-0" />
+          )}
         <div>
           <p className="text-sm font-medium text-slate-900">{row.businessName}</p>
           {/* No city here anymore — the group header directly above every
@@ -598,6 +833,7 @@ function ProspectRowItem({
           {row.skipReason && row.status === "skipped" && (
             <p className="mt-0.5 text-xs text-slate-400">Reason: {row.skipReason}</p>
           )}
+        </div>
         </div>
         {!isFinal && (
           <button

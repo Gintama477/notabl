@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
-import { findEmailForProspect } from "@/lib/db/queries";
+import { findEmailForProspect, updateProspectDraft } from "@/lib/db/queries";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
-const FindEmailSchema = z.object({ prospectId: z.string().min(1) });
+const FindEmailSchema = z.object({
+  prospectId: z.string().min(1),
+  // Persist the result instead of handing it back for the admin to save
+  // by hand. The single-prospect UI still leaves saving to the human (they
+  // may want to edit it first); bulk lookups set this, because clicking
+  // Save on forty rows defeats the point.
+  save: z.boolean().optional(),
+});
 
 // Can take up to ~45s (Outscraper's emails-and-contacts endpoint is
 // always-async, polled internally — see lib/outreach/findEmail.ts), so
@@ -13,9 +20,11 @@ const FindEmailSchema = z.object({ prospectId: z.string().min(1) });
 export const maxDuration = 60;
 
 /**
- * Admin-only, single-prospect email lookup — see the "Find Email" button in
- * components/admin/OutreachQueue.tsx and findEmailForProspect's doc comment
- * in lib/db/queries.ts for why this is deliberately never called in bulk.
+ * Admin-only email lookup for ONE prospect. Still one prospect per
+ * request even when the queue's bulk action is driving it — each lookup
+ * takes ~45s and cannot be batched inside a 60s function, so the client
+ * loops over this rather than a server-side batch endpoint existing.
+ * See the bulk controls in components/admin/OutreachQueue.tsx.
  */
 export async function POST(req: NextRequest) {
   const authorized = await hasValidAdminSession();
@@ -23,8 +32,11 @@ export async function POST(req: NextRequest) {
 
   // Same reasoning as app/api/admin/outreach/find/route.ts — admin-gated,
   // but a leaked admin session could still loop a real, billed Outscraper
-  // call with no other cap.
-  const rateLimit = checkRateLimit(`admin-outreach-find-email:${getClientIp(req)}`, 10, 10 * 60 * 1000);
+  // call with no other cap. Raised from 10 to 150 per 10 minutes because
+  // the queue's bulk lookup legitimately makes one request per selected
+  // prospect: at the old limit, selecting more than ten rows failed
+  // partway through by design. Still a real ceiling on a runaway loop.
+  const rateLimit = checkRateLimit(`admin-outreach-find-email:${getClientIp(req)}`, 150, 10 * 60 * 1000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Too many lookups. Please try again later." },
@@ -43,6 +55,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await findEmailForProspect(parsed.data.prospectId);
+    // Only persists a hit — a miss must never blank an address the admin
+    // already typed in by hand.
+    if (parsed.data.save && result.email) {
+      await updateProspectDraft(parsed.data.prospectId, { contactEmail: result.email });
+    }
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Email lookup failed." }, { status: 500 });
