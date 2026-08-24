@@ -8,6 +8,11 @@
 // Plain HTML table layout (not a heavy framework), same visual style as
 // weeklyReportEmail.ts, for maximum email-client compatibility.
 
+// Shared with the dashboard on purpose (components render it via the same
+// function) so the two can never drift on how source review text is
+// normalized — that drift is what left literal <br> tags in a sent email.
+import { formatReviewText } from "@/lib/reviews/formatReviewText";
+
 export type AlertReviewItem = {
   authorName: string | null;
   rating: number;
@@ -21,6 +26,11 @@ export type ReviewAlertEmailInput = {
   // (lowest rating, then newest) first — these get shown in full, since
   // that's what the owner actually needs to see.
   negativeReviews: AlertReviewItem[];
+  // How many further low-rated reviews existed beyond the ones included
+  // above (see MAX_REVIEWS_IN_ALERT in lib/alerts/reviewAlerts.ts).
+  // Summarized as a count with a dashboard link rather than padding the
+  // email — normally 0.
+  additionalNegativeCount: number;
   // Total new reviews since the last alert, of any rating (includes the
   // negativeReviews above).
   newReviewCount: number;
@@ -48,16 +58,31 @@ export function buildReviewAlertEmailSubject(input: ReviewAlertEmailInput): stri
 }
 
 export function buildReviewAlertEmailHtml(input: ReviewAlertEmailInput): string {
+  // Order matters below: normalize <br> to real newlines FIRST, then
+  // escape. Escaping first turns the tags into visible "&lt;br&gt;" —
+  // which is exactly what shipped. Source review text from Outscraper
+  // contains literal <br> tags; the dashboard already converted them via
+  // formatReviewText, and this template escaped them into view instead.
+  // The escape stays regardless — raw review HTML must never reach an
+  // inbox. white-space:pre-line is what renders the resulting newlines.
   const reviewBlocks = input.negativeReviews
     .map(
       (r) => `<div style="margin-bottom:12px;padding:14px;background-color:#fef2f2;border-left:3px solid #b91c1c;border-radius:4px;">
         <p style="margin:0;font-size:12px;font-weight:bold;color:#991b1b;">
           ${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)} — ${escapeHtml(r.authorName?.trim() || "Anonymous")}
         </p>
-        <p style="margin:6px 0 0 0;font-size:14px;color:#334155;white-space:pre-line;">${escapeHtml(r.reviewText)}</p>
+        <p style="margin:6px 0 0 0;font-size:14px;color:#334155;white-space:pre-line;">${escapeHtml(formatReviewText(r.reviewText))}</p>
       </div>`
     )
     .join("\n");
+
+  const overflowBlock =
+    input.additionalNegativeCount > 0
+      ? `<p style="margin:0 0 12px 0;font-size:13px;color:#64748b;">
+          and ${input.additionalNegativeCount} more low-rated review${input.additionalNegativeCount === 1 ? "" : "s"} —
+          <a href="${escapeHtml(input.dashboardUrl)}" style="color:#0f766e;">see them all on your dashboard</a>.
+        </p>`
+      : "";
 
   const summaryItems: string[] = [];
   if (input.newReviewCount > 0) {
@@ -90,6 +115,7 @@ export function buildReviewAlertEmailHtml(input: ReviewAlertEmailInput): string 
                 <p style="font-size:13px;color:#64748b;margin:0 0 20px 0;">Here&apos;s what happened with your reviews.</p>
 
                 ${reviewBlocks}
+                ${overflowBlock}
 
                 ${
                   summaryItems.length > 0
@@ -121,8 +147,16 @@ export function buildReviewAlertEmailText(input: ReviewAlertEmailInput): string 
 
   for (const r of input.negativeReviews) {
     lines.push(`${r.rating}/5 stars — ${r.authorName?.trim() || "Anonymous"}`);
-    lines.push(r.reviewText);
+    // Same normalization as the HTML version — a literal "<br>" is just as
+    // wrong in a plain-text email. No escaping here: this IS plain text.
+    lines.push(formatReviewText(r.reviewText));
     lines.push("");
+  }
+  if (input.additionalNegativeCount > 0) {
+    lines.push(
+      `and ${input.additionalNegativeCount} more low-rated review${input.additionalNegativeCount === 1 ? "" : "s"} — see them all on your dashboard.`,
+      ""
+    );
   }
 
   if (input.newReviewCount > 0) {

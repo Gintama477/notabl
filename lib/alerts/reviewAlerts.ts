@@ -32,6 +32,19 @@ const RATING_MOVEMENT_THRESHOLD = 0.1;
 // forgets they're paying and cancels.
 const SILENCE_FALLBACK_DAYS = 30;
 
+// Hard ceiling on how many individual reviews any single alert email may
+// contain in full. Anything beyond this is reported as a count with a
+// dashboard link instead.
+//
+// This is a BACKSTOP, not the fix — the reviewDate change below is what
+// stops historical reviews qualifying as new. It exists because the
+// failure mode is so bad: the first real alert this system sent contained
+// every historical complaint the practice had ever received, in one email.
+// Fifteen reviews in an email isn't an alert, it's a report, and nobody
+// reads it. Whatever future bug re-inflates the "new" set, the email stays
+// readable.
+const MAX_REVIEWS_IN_ALERT = 5;
+
 export type AlertCandidate = {
   businessId: string;
   businessName: string;
@@ -162,8 +175,20 @@ export async function processBusinessForAlert(candidate: AlertCandidate): Promis
 
     const allRealReviews = await db.select().from(reviews).where(and(eq(reviews.businessId, businessId), eq(reviews.isDemoData, false)));
 
+    // reviewDate (when the PATIENT WROTE it), never createdAt (when we
+    // happened to import the row). This filtered on createdAt, guarded by
+    // connectedAt on the reasoning that a first import can't look new —
+    // which is true, and still wrong. It fails on any RE-sync: this
+    // business was reconnected after the review cap went from 200 to 500,
+    // importing ~249 historical reviews with fresh createdAt values, all
+    // later than connectedAt. Every historical complaint became "new" and
+    // went out in one email. The same fires whenever a practice
+    // reconnects, the cap changes, or a backfill runs.
+    //
+    // reviewDate is stored as a full ISO timestamp, the same shape as the
+    // anchor, so this string comparison is exact rather than approximate.
     const newReviews = allRealReviews
-      .filter((r) => r.createdAt > sinceAnchor)
+      .filter((r) => r.reviewDate > sinceAnchor)
       // Worst-first: a negative review outranks everything else, per the
       // alert rules — this ordering is what the email leads with.
       .sort((a, b) => a.rating - b.rating || (a.reviewDate < b.reviewDate ? 1 : -1));
@@ -182,7 +207,11 @@ export async function processBusinessForAlert(candidate: AlertCandidate): Promis
     let ratingBefore: number | null = null;
     let ratingNow: number | null = null;
     if (hasPriorEmail) {
-      const before = allRealReviews.filter((r) => r.createdAt <= sinceAnchor);
+      // reviewDate here too, for the same reason as newReviews above: with
+      // createdAt, a re-sync moved hundreds of old reviews out of the
+      // "before" set, so the prior average was computed over a handful of
+      // rows and reported a large rating "movement" that never happened.
+      const before = allRealReviews.filter((r) => r.reviewDate <= sinceAnchor);
       if (before.length > 0) {
         ratingBefore = before.reduce((sum, r) => sum + r.rating, 0) / before.length;
       }
@@ -202,7 +231,12 @@ export async function processBusinessForAlert(candidate: AlertCandidate): Promis
         input: {
           businessName,
           dashboardUrl,
-          negativeReviews: negativeReviews.map((r) => ({ authorName: r.authorName, rating: r.rating, reviewText: r.reviewText })),
+          // Worst-first (sorted above), so the capped slice is the few that
+          // most need reading, not an arbitrary five.
+          negativeReviews: negativeReviews
+            .slice(0, MAX_REVIEWS_IN_ALERT)
+            .map((r) => ({ authorName: r.authorName, rating: r.rating, reviewText: r.reviewText })),
+          additionalNegativeCount: Math.max(0, negativeReviews.length - MAX_REVIEWS_IN_ALERT),
           newReviewCount: newReviews.length,
           newFeedbackCount: newFeedback.length,
           ratingBefore,
