@@ -27,16 +27,33 @@ export function Hero() {
               reviews" on its own is the analysis-only positioning this copy
               replaced. The pairing at $49/month is what's actually
               differentiated. See marketing/core-sales-message.md.
+
+              The HEADLINE keeps that pairing. The SUBHEADLINE below
+              deliberately leads with the alert, and deliberately opens on
+              the same beat as the cold outreach email ("Most practices
+              find out about a bad review days later" — see
+              buildOutreachDraftBody in lib/email/templates/outreachEmail.ts).
+              A prospect arriving from that email used to hit a headline
+              about getting more reviews, breaking the story at exactly the
+              moment it should connect. If either side of that pairing is
+              reworded, reword the other — they are meant to echo.
+
+              Alerts lead because they are the recurring value. The
+              analysis is a snapshot that changes slowly for a practice
+              getting a handful of reviews a month, and the QR code is a
+              printed artifact the practice keeps. The alert is the part
+              that happens again every time a review needs answering, so
+              it's the honest answer to "why keep paying."
             */}
             <h1 className="font-serif text-4xl font-semibold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl">
               Get more patient reviews — and know what they&apos;re
               actually telling you.
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-600">
-              Share a QR code at the front desk, and patients can leave a
-              Google review in a couple of taps. Notabl reads every review
-              that comes in and emails you the moment one actually needs
-              your attention — not on a schedule, only when it matters.
+              Most practices find out about a bad review days later. Notabl
+              emails you the same day one needs your attention — and gives
+              you a front-desk QR code so the happy patients actually leave
+              one.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <PrimaryCta
