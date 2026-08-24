@@ -35,6 +35,13 @@ export function FindProspectsForm() {
   // can be cleared while typing; parsed on submit, where an empty or
   // unparseable value falls back to the server's own default of 20.
   const [limit, setLimit] = useState("20");
+  // Rating/review-count filters. Empty string means "no bound", which is
+  // why these are strings rather than numbers — 0 is a meaningful value
+  // for the review-count fields and must not be confused with "unset".
+  const [minRating, setMinRating] = useState("");
+  const [maxRating, setMaxRating] = useState("");
+  const [minReviewCount, setMinReviewCount] = useState("");
+  const [maxReviewCount, setMaxReviewCount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -51,15 +58,36 @@ export function FindProspectsForm() {
         // limit was the whole bug here: findProspects() and the route's
         // schema have always accepted one, but this body never sent it, so
         // every search silently used the default of 20.
-        body: JSON.stringify({ city, state, category: category || undefined, limit: limitToSend }),
+        body: JSON.stringify({
+          city,
+          state,
+          category: category || undefined,
+          limit: limitToSend,
+          // undefined (not 0/NaN) when a field is blank, so JSON.stringify
+          // drops it and the server treats that bound as unset.
+          minRating: optionalNumber(minRating),
+          maxRating: optionalNumber(maxRating),
+          minReviewCount: optionalNumber(minReviewCount),
+          maxReviewCount: optionalNumber(maxReviewCount),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setResult({ ok: false, message: data.error?.formErrors?.[0] || data.error || "Search failed." });
       } else {
+        // Reports searched AND matched when a filter narrowed things, so
+        // "this city is small" never gets mistaken for "your filter was
+        // too tight" — they need opposite responses.
+        const filtered = typeof data.searched === "number" && data.searched !== data.found;
+        const base = filtered
+          ? `Searched ${data.searched} listing(s), ${data.found} matched your filters — drafted ${data.added} new, ${data.alreadyExisted} already in the queue.`
+          : `Found ${data.found} listing(s) — drafted ${data.added} new, ${data.alreadyExisted} already in the queue.`;
         setResult({
           ok: true,
-          message: `Found ${data.found} listing(s) — drafted ${data.added} new, ${data.alreadyExisted} already in the queue.`,
+          message:
+            data.found === 0 && data.searched > 0
+              ? `${base} Try widening the rating range, or raising how many to find.`
+              : base,
         });
         router.refresh();
       }
@@ -125,6 +153,52 @@ export function FindProspectsForm() {
           "Find Prospects"
         )}
       </button>
+      {/* Filters. Applied after the listings come back (Outscraper can't
+          filter by rating server-side), so a narrow range returns fewer
+          than the limit — which the result message reports rather than
+          hiding. */}
+      <div className="grid gap-3 border-t border-slate-100 pt-3 sm:col-span-6 sm:grid-cols-4">
+        <NumberField label="Min rating" value={minRating} onChange={setMinRating} placeholder="any" step="0.1" min={0} max={5} />
+        <NumberField label="Max rating" value={maxRating} onChange={setMaxRating} placeholder="any" step="0.1" min={0} max={5} />
+        <NumberField label="Min reviews" value={minReviewCount} onChange={setMinReviewCount} placeholder="any" min={0} />
+        <NumberField label="Max reviews" value={maxReviewCount} onChange={setMaxReviewCount} placeholder="any" min={0} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:col-span-6">
+        <span className="text-xs text-slate-400">Preset:</span>
+        <button
+          type="button"
+          onClick={() => {
+            // The practices with the most to gain: rated well enough to be
+            // a real business, poorly enough that reviews are visibly
+            // hurting them, and with enough volume that a rating shift is
+            // meaningful rather than one bad review.
+            setMinRating("3");
+            setMaxRating("4.3");
+            setMinReviewCount("20");
+            setMaxReviewCount("");
+          }}
+          className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Most to gain (3.0–4.3★, 20+ reviews)
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMinRating("");
+            setMaxRating("");
+            setMinReviewCount("");
+            setMaxReviewCount("");
+          }}
+          className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Clear filters
+        </button>
+      </div>
+      <p className="text-xs text-slate-400 sm:col-span-6">
+        Filters are applied to the listings that come back, so a narrow range returns fewer results per search —
+        search a larger number, or more cities, to fill the queue. Rating targeting stays in <em>who</em> you
+        email; the email copy itself never mentions their rating.
+      </p>
       <p className="text-xs text-slate-400 sm:col-span-6">
         How many listings to pull for this city, 1-100 (default 20). Larger searches take longer and can time out
         past the 60-second limit — if 100 fails, try 50. Outscraper may also return fewer than you ask for if the
@@ -207,6 +281,48 @@ export function OutreachControls() {
       <RedraftDraftsButton />
     </>
   );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  step,
+  min,
+  max,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  step?: string;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        step={step}
+        min={min}
+        max={max}
+        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+      />
+    </label>
+  );
+}
+
+/** "" -> undefined so a blank field means "no bound" rather than 0. */
+function optionalNumber(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function statusLabel(status: string): string {

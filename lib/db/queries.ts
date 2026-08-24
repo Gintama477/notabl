@@ -1089,14 +1089,22 @@ export async function findAndDraftProspects(opts: {
   state: string;
   category?: string;
   limit?: number;
+  minRating?: number;
+  maxRating?: number;
+  minReviewCount?: number;
+  maxReviewCount?: number;
   sampleReportUrl: string;
   senderName: string;
 }) {
-  const found = await findProspects({
+  const { prospects: found, searchedCount } = await findProspects({
     city: opts.city,
     state: opts.state,
     category: opts.category,
     limit: opts.limit,
+    minRating: opts.minRating,
+    maxRating: opts.maxRating,
+    minReviewCount: opts.minReviewCount,
+    maxReviewCount: opts.maxReviewCount,
   });
 
   let added = 0;
@@ -1136,7 +1144,9 @@ export async function findAndDraftProspects(opts: {
     added++;
   }
 
-  return { found: found.length, added, alreadyExisted };
+  // searched vs found is the difference between "this city is small"
+  // and "your filter rejected most of them" — the form reports both.
+  return { searched: searchedCount, found: found.length, added, alreadyExisted };
 }
 
 /**

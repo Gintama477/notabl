@@ -10,6 +10,13 @@ const FindSchema = z.object({
   state: z.string().min(1).max(60),
   category: z.string().max(80).optional().or(z.literal("")),
   limit: z.number().int().min(1).max(100).optional(),
+  // Post-fetch filters (see findProspects). Bounded to what a Google
+  // rating and review count can actually be, so nonsense never reaches
+  // the filter.
+  minRating: z.number().min(0).max(5).optional(),
+  maxRating: z.number().min(0).max(5).optional(),
+  minReviewCount: z.number().int().min(0).max(100000).optional(),
+  maxReviewCount: z.number().int().min(0).max(100000).optional(),
 });
 
 // Admin-only. Finds public dental-practice listings (name, address, phone,
@@ -67,6 +74,10 @@ export async function POST(req: NextRequest) {
       state: parsed.data.state,
       category: parsed.data.category || undefined,
       limit: parsed.data.limit,
+      minRating: parsed.data.minRating,
+      maxRating: parsed.data.maxRating,
+      minReviewCount: parsed.data.minReviewCount,
+      maxReviewCount: parsed.data.maxReviewCount,
       sampleReportUrl,
       senderName,
     });

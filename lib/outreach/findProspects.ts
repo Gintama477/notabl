@@ -75,12 +75,34 @@ function flattenBusinesses(data: unknown): OutscraperBusiness[] {
   return data as OutscraperBusiness[];
 }
 
+export type FindProspectsResult = {
+  prospects: FoundProspect[];
+  /**
+   * Usable listings the API returned BEFORE the rating/review filters
+   * below. Reported separately from prospects.length so the admin can tell
+   * "this city only has 12 dentists" apart from "50 came back and your
+   * filter rejected 38" — opposite problems that look identical from a
+   * bare result count.
+   */
+  searchedCount: number;
+};
+
 export async function findProspects(opts: {
   city: string;
   state: string;
   category?: string;
   limit?: number;
-}): Promise<FoundProspect[]> {
+  // Applied AFTER the response is mapped. Outscraper's Maps Search has no
+  // documented server-side rating or review-count filtering, so this is a
+  // post-fetch filter over whatever comes back — which is why a filtered
+  // search returns fewer rows than `limit` and why that gets reported
+  // rather than quietly re-querying to top the number back up (each
+  // re-query is another billed call the admin didn't ask for).
+  minRating?: number;
+  maxRating?: number;
+  minReviewCount?: number;
+  maxReviewCount?: number;
+}): Promise<FindProspectsResult> {
   const apiKey = process.env.OUTSCRAPER_API_KEY;
   if (!apiKey) {
     throw new Error("OUTSCRAPER_API_KEY is not set — add it in Vercel Environment Variables before finding prospects.");
@@ -135,5 +157,17 @@ export async function findProspects(opts: {
     });
   }
 
-  return results;
+  // A listing with no rating at all can't satisfy a rating filter, so it's
+  // excluded when one is set rather than being let through on a
+  // technicality — asking for "4.3 stars and below" and receiving unrated
+  // practices would be a worse answer than a shorter list.
+  const matches = (p: FoundProspect): boolean => {
+    if (opts.minRating != null && (p.googleRating == null || p.googleRating < opts.minRating)) return false;
+    if (opts.maxRating != null && (p.googleRating == null || p.googleRating > opts.maxRating)) return false;
+    if (opts.minReviewCount != null && (p.googleReviewCount == null || p.googleReviewCount < opts.minReviewCount)) return false;
+    if (opts.maxReviewCount != null && (p.googleReviewCount == null || p.googleReviewCount > opts.maxReviewCount)) return false;
+    return true;
+  };
+
+  return { prospects: results.filter(matches), searchedCount: results.length };
 }
