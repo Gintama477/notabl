@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AppealForm } from "./AppealForm";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 import { useAnalysisProgress } from "./useAnalysisProgress";
+import { useConnectTransition } from "./ConnectTransition";
 
 const PLACE_ID_FINDER_URL = "https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder";
 
@@ -50,6 +51,7 @@ export function ConnectReviewsCard() {
   const [placeId, setPlaceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { progress, start, recordRound, clear } = useAnalysisProgress();
+  const { beginConnect, endConnect } = useConnectTransition();
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [claimedByOther, setClaimedByOther] = useState(false);
 
@@ -58,6 +60,11 @@ export function ConnectReviewsCard() {
     setSubmitting(true);
     setResult(null);
     setClaimedByOther(false);
+    // Before the request, not after: connectGoogleReviewSource deletes
+    // every demo review, so from this instant the metric tiles and the
+    // demo banner are describing rows that are being removed. They hide
+    // themselves until fresh server data lands (see ConnectTransition).
+    beginConnect();
 
     try {
       const res = await fetch("/api/reviews/connect-google", {
@@ -68,6 +75,9 @@ export function ConnectReviewsCard() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Nothing was deleted on a failed connect, so the demo metrics
+        // and banner are truthful again and must come back.
+        endConnect();
         if (data.code === "business_already_claimed") {
           setClaimedByOther(true);
           setSubmitting(false);
@@ -84,6 +94,8 @@ export function ConnectReviewsCard() {
       // 0 in that case, which would otherwise misleadingly read as "found
       // nothing" or "fully analyzed."
       if (data.cooledDown) {
+        // A cooled-down connect changed nothing either.
+        endConnect();
         setResult({ ok: true, message: "This business was already synced within the last few minutes — try again shortly." });
         setSubmitting(false);
         return;
@@ -139,8 +151,12 @@ export function ConnectReviewsCard() {
       }
 
       setResult({ ok: true, message: `${importedMessage} Analyzed all ${totalAnalyzed} review(s). Refreshing your dashboard…` });
-      setTimeout(() => router.refresh(), 1500);
+      // Immediately, not on a timer. The suppressed metrics/banner stay
+      // suppressed until this lands, so every extra second of delay is a
+      // second of blanked chrome for no benefit.
+      router.refresh();
     } catch {
+      endConnect();
       setResult({ ok: false, message: "Connection failed. Please try again." });
       setSubmitting(false);
       clear();

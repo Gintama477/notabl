@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingDots } from "@/components/ui/LoadingDots";
 import { useAnalysisProgress } from "./useAnalysisProgress";
+import { useConnectTransition } from "./ConnectTransition";
 
 // Same backstop as RunAnalysisButton / ConnectReviewsCard.
 const MAX_ROUNDS = 20;
@@ -31,6 +32,14 @@ export function FirstRunAnalysis() {
   const [message, setMessage] = useState<string | null>(null);
   const [running, setRunning] = useState(true);
   const startedRef = useRef(false);
+  const { connecting } = useConnectTransition();
+  // Mirrored into a ref so the long-running loop below reads the CURRENT
+  // value — it closes over the first render's props otherwise, and would
+  // never notice a connect starting.
+  const connectingRef = useRef(connecting);
+  useEffect(() => {
+    connectingRef.current = connecting;
+  }, [connecting]);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -52,6 +61,19 @@ export function FirstRunAnalysis() {
                 ? "Rate limited — your progress is saved. Click “Run Analysis Now” in a few minutes to continue."
                 : "Analysis was interrupted. Your progress is saved — click “Run Analysis Now” to continue."
             );
+            return;
+          }
+
+          // Belt and braces alongside the render gate in
+          // app/dashboard/page.tsx, which already stops this component
+          // mounting while the connect card is present. If a connect
+          // somehow starts mid-loop, the demo reviews this is counting are
+          // being deleted underneath it — so stop immediately and drop the
+          // progress display rather than keep reporting "46 of 55" about
+          // rows that no longer exist.
+          if (connectingRef.current) {
+            clear();
+            setRunning(false);
             return;
           }
 

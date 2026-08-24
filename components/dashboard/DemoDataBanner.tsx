@@ -1,3 +1,7 @@
+"use client";
+
+import { useConnectTransition } from "./ConnectTransition";
+
 import Link from "next/link";
 import { PLANS, DEFAULT_PLAN } from "@/config/pricing";
 
@@ -29,6 +33,14 @@ export function DemoDataBanner({
   hasUsedTrialBefore: boolean;
 }) {
   const plan = PLANS[DEFAULT_PLAN];
+  const { connecting } = useConnectTransition();
+
+  // hasDemoData is server-rendered, so this banner outlived the truth: it
+  // kept saying "you're viewing example reviews" for seconds after the
+  // connect card had already reported real reviews imported. It must never
+  // be possible to read both statements on one screen.
+  if (connecting) return null;
+
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-center text-sm font-medium text-amber-800">
       You&apos;re viewing example reviews, not your practice&apos;s real data.

@@ -1,3 +1,7 @@
+"use client";
+
+import { useConnectTransition } from "./ConnectTransition";
+
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5">
@@ -31,6 +35,25 @@ export function MetricsRow({
   emergingIssuesCount: number;
   importantThemesCount: number;
 }) {
+  const { connecting } = useConnectTransition();
+
+  // Every number here is server-rendered from the demo dataset that a
+  // connect is in the middle of deleting. Showing "45 / 100" beside the
+  // connect card's "imported 17 reviews" is worse than showing nothing, so
+  // these become placeholders until real data arrives.
+  if (connecting) {
+    return (
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-lg border border-slate-200 bg-white p-5">
+            <div className="h-3 w-20 animate-pulse rounded bg-slate-100" />
+            <div className="mt-3 h-6 w-12 animate-pulse rounded bg-slate-100" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const analysisComplete = reviewsAnalyzedCount >= totalReviews;
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">

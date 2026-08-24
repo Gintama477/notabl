@@ -33,6 +33,7 @@ import { NewThisWeek } from "@/components/dashboard/NewThisWeek";
 import { LowRatedReviewsCard } from "@/components/dashboard/LowRatedReviewsCard";
 import { RunAnalysisButton } from "@/components/dashboard/RunAnalysisButton";
 import { FirstRunAnalysis } from "@/components/dashboard/FirstRunAnalysis";
+import { ConnectTransitionProvider } from "@/components/dashboard/ConnectTransition";
 import { track } from "@/lib/analytics/track";
 import { inactiveSubscriptionMessage } from "@/lib/billing/statusCopy";
 import { formatLastUpdated } from "@/lib/reports/formatLastUpdated";
@@ -156,6 +157,9 @@ export default async function DashboardPage() {
     <>
       <BfcacheGuard />
       <Header variant="app" />
+      {/* Wraps the banner AND main because both render server-side demo
+          state that a connect invalidates — see ConnectTransition. */}
+      <ConnectTransitionProvider hasDemoData={data.hasDemoData}>
       {data.hasDemoData && (
         <DemoDataBanner showSubscriptionCta={!isActiveOrTrialing} hasUsedTrialBefore={hasUsedTrialBefore} />
       )}
@@ -269,12 +273,32 @@ export default async function DashboardPage() {
                 // automatically so the customer still never has to click
                 // anything. With no reviews at all there's nothing to
                 // analyze, so it stays a plain message.
-                data.totalReviews > 0 ? (
+                // NOT while the connect card is up. Two analysis loops
+                // would otherwise run against different datasets, one of
+                // which connectGoogleReviewSource is about to delete — the
+                // demo reviews. That produced a progress bar counting rows
+                // being deleted, next to metrics describing the same dead
+                // rows, next to the real import result.
+                //
+                // It also spends real Claude money analyzing demo reviews
+                // for a subscribed customer who is one paste away from
+                // replacing them. The case this component exists for — a
+                // signed-up account whose demo dashboard has no report yet
+                // — is unaffected: at that point the subscription is still
+                // "none", so the connect card isn't rendered.
+                data.totalReviews > 0 && !showConnectReviewsCard ? (
                   <FirstRunAnalysis />
                 ) : (
                   <div className="mt-10 rounded-lg border border-slate-200 bg-white p-8 text-center">
                     <p className="text-slate-600">
-                      No reviews to analyze yet. Connect your Google reviews above to get your first report.
+                      {showConnectReviewsCard
+                        ? // Reached by a subscribed customer still on demo
+                          // data. Deliberately doesn't claim there's
+                          // nothing to analyze — there are demo reviews;
+                          // they're just not worth spending analysis on
+                          // when real ones are one paste away.
+                          "Connect your Google reviews above and your first report will be generated automatically."
+                        : "No reviews to analyze yet. Connect your Google reviews above to get your first report."}
                     </p>
                   </div>
                 )
@@ -335,6 +359,7 @@ export default async function DashboardPage() {
           )}
         </div>
       </main>
+      </ConnectTransitionProvider>
       <Footer />
     </>
   );
