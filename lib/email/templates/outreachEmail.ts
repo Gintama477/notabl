@@ -34,30 +34,45 @@ export function buildOutreachEmailSubject(
   // (findAndDraftProspects in lib/db/queries.ts, the re-draft action) pass
   // the practice name, and preserving the parameter means putting it back
   // in the subject is a one-line change if open rates ever argue for it.
-  // Do not "fix" this by interpolating it back in without re-reading the
-  // reasoning above — its absence is the point.
+  // A merge field in a subject line is the signature of bulk sales
+  // tooling; its absence is the point. Do not "fix" this by interpolating
+  // it back in without re-reading the reasoning above.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  practiceName: string
+  _practiceName: string
 ): string {
-  return "the review you haven't seen yet";
+  return "a student project, and a free read on your reviews";
 }
 
-// PROBLEM-FIRST. The opening line names a situation the reader recognizes
-// — finding out about a bad review days late — before Notabl is mentioned
-// at all. The previous version opened by describing the product's two
-// halves, which is a fine explanation but a weak hook: it asks a stranger
-// to care about a tool's architecture before they've agreed there's a
-// problem. Lead with the problem, and the pairing (watch + collect) lands
-// in the next paragraph as the answer to it rather than as a feature list.
-// The differentiation is still doing both at $49/mo with no contract and
-// no sales call — see marketing/core-sales-message.md.
+// STUDENT + FREE AUDIT. This copy doesn't sell. It offers to do something
+// free and asks whether it was useful.
 //
-// Chosen over three alternatives as the first thing to actually test: a
-// short founder note, a tightened version of the old two-halves copy, and
-// a free-audit offer. The free-audit version is held in reserve — it's the
-// strongest hook of the four but the most expensive to honor, so it's what
-// to try next if reply rates on this are poor. Recorded so the next person
-// here knows this was a decision, not a default.
+// Lineage, so the reasoning stays readable: v1 led with the PAIRING (get
+// reviews in + understand them). v2 was PROBLEM-FIRST ("most practices
+// find out about a bad review days later") — a better hook, and the
+// free-audit option was explicitly held in reserve at that point as the
+// strongest but most expensive to honor. v2 went to 36 practices and
+// produced ZERO replies, so the reserve option is now in play.
+//
+// The diagnosis wasn't the hook, it was the ask. Every previous version
+// asked a stranger to evaluate a purchase, which is the highest-friction
+// thing you can request from someone who has never heard of you. This
+// asks for permission to do them a favour instead.
+//
+// "Student" is doing real work here: people answer a student differently
+// than they answer a vendor, and it happens to be true. Naming a
+// CHECKABLE school and city is what separates it from a spammer's line —
+// which is exactly why those are factual claims about the sender, not
+// decorative copy.
+//
+// UPDATE THE SCHOOL AND CITY IF THE SENDER'S SITUATION CHANGES. Leaving
+// "student at Stevens in Hoboken" in place once it stops being true turns
+// the most credibility-carrying sentence in the email into a lie.
+//
+// Worth knowing what a reply now costs: it's a request to actually run
+// the analysis — roughly ten minutes per practice through the admin
+// panel plus a dollar or two of API spend. That's the intended trade,
+// fewer and warmer replies that require real work, rather than many cold
+// sends that require none and produced nothing.
 //
 // Constraints this copy has to keep holding:
 //   - No claim about THIS practice's actual reviews. The first paragraph
@@ -93,15 +108,20 @@ export function buildOutreachDraftBody(opts: {
   return [
     "Hi,",
     "",
-    "Most practices find out about a bad review days later — usually because a patient mentions it, or someone happens to check.",
+    // "Happy to run it" is an OFFER. It must never become "I read your
+    // reviews" or "I ran this on your practice" — no analysis has been run
+    // for a cold prospect, so that would simply be false. This is the Tier
+    // 1 line (marketing/personalized-outreach-system.md) and the single
+    // easiest thing to break while "tightening" this copy.
+    "I'm a business & technology student at Stevens in Hoboken, and I built a small tool called Notabl that reads through a dental practice's Google reviews and says in plain language what patients keep praising and what keeps coming up as a problem.",
     "",
-    "I built a small tool called Notabl that watches for you. It emails you the same day a review needs attention, turns the rest into a plain-language summary of what patients keep bringing up, and gives you a front-desk QR code so the happy ones actually leave a review.",
+    "I'm trying to find out whether it's actually useful to real practices. Happy to run it on yours for free and send you the result — no charge, no signup, and I won't chase you afterwards.",
     "",
-    "It's $49/month, no contract and no sales call.",
+    "There is a paid version if it turns out to be useful, but honestly I mostly want to know whether I built something worth using.",
     "",
-    `Here's a sample report so you can see the format: ${opts.sampleReportUrl}`,
+    `Here's the format, on a sample practice: ${opts.sampleReportUrl}`,
     "",
-    "Worth 10 minutes?",
+    "Want me to run it on yours?",
     "",
     opts.senderName,
   ].join("\n");
