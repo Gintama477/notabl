@@ -1089,6 +1089,8 @@ export async function findAndDraftProspects(opts: {
   city: string;
   state: string;
   category?: string;
+  /** Which list these rows belong to. Dedupe is scoped to it. */
+  campaign?: string;
   limit?: number;
   minRating?: number;
   maxRating?: number;
@@ -1113,14 +1115,20 @@ export async function findAndDraftProspects(opts: {
   // listings on one domain costs one DNS lookup.
   const mx = createMxCache();
   const blockedAddresses = await getBlockedOutreachAddresses();
+  const campaign = opts.campaign?.trim() || "notabl-dental";
 
   let added = 0;
   let alreadyExisted = 0;
   for (const p of found) {
+    // Scoped to the campaign, matching the (campaign, google_place_id)
+    // unique index. Changing the index alone would have fixed nothing:
+    // this lookup is what actually skipped the row, so a global check here
+    // would still have made a second client's search silently return
+    // fewer results.
     const [existing] = await db
       .select({ id: prospects.id })
       .from(prospects)
-      .where(eq(prospects.googlePlaceId, p.googlePlaceId))
+      .where(and(eq(prospects.googlePlaceId, p.googlePlaceId), eq(prospects.campaign, campaign)))
       .limit(1);
     if (existing) {
       alreadyExisted++;
@@ -1137,6 +1145,7 @@ export async function findAndDraftProspects(opts: {
     const validation = await validateProspectEmail(p.contactEmail, { mx, blockedAddresses });
 
     await db.insert(prospects).values({
+      campaign,
       emailValidationStatus: validation.status,
       emailValidationReason: validation.reason,
       businessName: p.businessName,
@@ -1155,9 +1164,18 @@ export async function findAndDraftProspects(opts: {
     added++;
   }
 
+  // Outscraper bills per call, so record what this search cost and
+  // returned. Without it, cost per list is guesswork after the fact.
+  await db.insert(automationLogs).values({
+    jobName: "outreach-find",
+    status: "success",
+    detail: `Campaign "${campaign}": searched "${opts.category?.trim() || "Dentist"}" in ${opts.city}, ${opts.state} — Outscraper returned ${searchedCount} listing(s), ${found.length} passed filters, ${added} newly drafted, ${alreadyExisted} already in this campaign.`,
+    finishedAt: new Date().toISOString(),
+  });
+
   // searched vs found is the difference between "this city is small"
   // and "your filter rejected most of them" — the form reports both.
-  return { searched: searchedCount, found: found.length, added, alreadyExisted };
+  return { campaign, searched: searchedCount, found: found.length, added, alreadyExisted };
 }
 
 /**
@@ -1281,6 +1299,38 @@ export async function verifyProspectEmails(limit = 200): Promise<VerifyEmailsRes
   }
 
   return { ...tally, domainsLookedUp: mx.size };
+}
+
+/**
+ * One campaign's rows for CSV export. Excludes addresses our own validator
+ * marked invalid unless explicitly asked for — a list handed to a buyer
+ * should never contain something we already know will bounce.
+ */
+export async function getProspectsForExport(campaign: string, includeInvalid = false) {
+  const conditions = [eq(prospects.campaign, campaign)];
+  if (!includeInvalid) {
+    // ne() alone would drop rows where the status is NULL (never verified),
+    // which are not known-bad and belong in the export.
+    conditions.push(or(isNull(prospects.emailValidationStatus), ne(prospects.emailValidationStatus, "invalid"))!);
+  }
+  return db.select().from(prospects).where(and(...conditions)).orderBy(desc(prospects.createdAt));
+}
+
+/** Distinct campaigns with their headline counts — what gets reported to a buyer. */
+export async function getCampaignSummaries() {
+  const rows = await db.select().from(prospects);
+  const byCampaign = new Map<string, { campaign: string; total: number; valid: number; flagged: number; invalid: number; unchecked: number }>();
+  for (const r of rows) {
+    const key = r.campaign;
+    const entry = byCampaign.get(key) ?? { campaign: key, total: 0, valid: 0, flagged: 0, invalid: 0, unchecked: 0 };
+    entry.total++;
+    if (r.emailValidationStatus === "valid") entry.valid++;
+    else if (r.emailValidationStatus === "flagged") entry.flagged++;
+    else if (r.emailValidationStatus === "invalid") entry.invalid++;
+    else entry.unchecked++;
+    byCampaign.set(key, entry);
+  }
+  return [...byCampaign.values()].sort((a, b) => b.total - a.total);
 }
 
 export async function getProspects() {

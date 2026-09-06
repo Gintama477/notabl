@@ -9,6 +9,7 @@ const FindSchema = z.object({
   city: z.string().min(1).max(120),
   state: z.string().min(1).max(60),
   category: z.string().max(80).optional().or(z.literal("")),
+  campaign: z.string().max(80).optional().or(z.literal("")),
   limit: z.number().int().min(1).max(100).optional(),
   // Post-fetch filters (see findProspects). Bounded to what a Google
   // rating and review count can actually be, so nonsense never reaches
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest) {
       city: parsed.data.city,
       state: parsed.data.state,
       category: parsed.data.category || undefined,
+      campaign: parsed.data.campaign || undefined,
       limit: parsed.data.limit,
       minRating: parsed.data.minRating,
       maxRating: parsed.data.maxRating,

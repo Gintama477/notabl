@@ -14,6 +14,7 @@ export type ProspectRow = {
   googleRating: number | null;
   googleReviewCount: number | null;
   contactEmail: string | null;
+  campaign: string;
   emailValidationStatus: string | null;
   emailValidationReason: string | null;
   emailSubject: string | null;
@@ -33,6 +34,9 @@ export function FindProspectsForm() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [category, setCategory] = useState("");
+  // Tags every row this search creates. Dedupe is scoped to it, so the
+  // same business can be found again for a different client's list.
+  const [campaign, setCampaign] = useState("");
   // How many listings to pull for this city. Held as a string so the field
   // can be cleared while typing; parsed on submit, where an empty or
   // unparseable value falls back to the server's own default of 20.
@@ -64,6 +68,7 @@ export function FindProspectsForm() {
           city,
           state,
           category: category || undefined,
+          campaign: campaign || undefined,
           limit: limitToSend,
           // undefined (not 0/NaN) when a field is blank, so JSON.stringify
           // drops it and the server treats that bound as unset.
@@ -82,8 +87,8 @@ export function FindProspectsForm() {
         // too tight" — they need opposite responses.
         const filtered = typeof data.searched === "number" && data.searched !== data.found;
         const base = filtered
-          ? `Searched ${data.searched} listing(s), ${data.found} matched your filters — drafted ${data.added} new, ${data.alreadyExisted} already in the queue.`
-          : `Found ${data.found} listing(s) — drafted ${data.added} new, ${data.alreadyExisted} already in the queue.`;
+          ? `[${data.campaign}] Searched ${data.searched} listing(s), ${data.found} matched your filters — drafted ${data.added} new, ${data.alreadyExisted} already in this campaign.`
+          : `[${data.campaign}] Found ${data.found} listing(s) — drafted ${data.added} new, ${data.alreadyExisted} already in this campaign.`;
         setResult({
           ok: true,
           message:
@@ -129,7 +134,14 @@ export function FindProspectsForm() {
         value={category}
         onChange={(e) => setCategory(e.target.value)}
         placeholder="Category (default: Dentist)"
-        className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-1"
+      />
+      <input
+        value={campaign}
+        onChange={(e) => setCampaign(e.target.value)}
+        placeholder="Campaign (default: notabl-dental)"
+        title="Names this list. Deduping is per campaign, so the same business can appear in two different lists."
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-1"
       />
       <input
         type="number"
@@ -444,16 +456,32 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   const [busy, setBusy] = useState<null | "finding" | "sending" | "verifying">(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  // "" = every campaign. Filtering is display-only; bulk actions still
+  // operate on whatever is selected, which can only be what's visible.
+  const [campaignFilter, setCampaignFilter] = useState("");
 
   if (rows.length === 0) {
     return <p className="p-4 text-sm text-slate-400">No prospects yet — use the form above to find some.</p>;
   }
 
-  const groups = groupProspectsByCity(rows);
-  const actionable = rows.filter(isSendable);
+  const allCampaigns = [...new Set(rows.map((r) => r.campaign))].sort();
+  const visibleRows = campaignFilter ? rows.filter((r) => r.campaign === campaignFilter) : rows;
+
+  // Counts are per VISIBLE campaign — these four numbers are what gets
+  // reported to a buyer, so they have to describe the list being looked
+  // at, not every prospect ever found.
+  const counts = {
+    total: visibleRows.length,
+    valid: visibleRows.filter((r) => r.emailValidationStatus === "valid").length,
+    flagged: visibleRows.filter((r) => r.emailValidationStatus === "flagged").length,
+    invalid: visibleRows.filter((r) => r.emailValidationStatus === "invalid").length,
+  };
+
+  const groups = groupProspectsByCity(visibleRows);
+  const actionable = visibleRows.filter(isSendable);
   const selectedRows = actionable.filter((r) => selected.has(r.id));
-  const invalidCount = rows.filter((r) => isActionable(r) && r.emailValidationStatus === "invalid").length;
-  const uncheckedCount = rows.filter((r) => isActionable(r) && !r.emailValidationStatus).length;
+  const invalidCount = visibleRows.filter((r) => isActionable(r) && r.emailValidationStatus === "invalid").length;
+  const uncheckedCount = visibleRows.filter((r) => isActionable(r) && !r.emailValidationStatus).length;
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -602,6 +630,55 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
 
   return (
     <div>
+      {/* Campaign selector + the four counts a buyer gets told, and the
+          export for whichever list is showing. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          Campaign
+          <select
+            value={campaignFilter}
+            onChange={(e) => {
+              setCampaignFilter(e.target.value);
+              // Selections refer to rows that may no longer be visible.
+              setSelected(new Set());
+            }}
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          >
+            <option value="">All campaigns ({rows.length})</option>
+            {allCampaigns.map((c) => (
+              <option key={c} value={c}>
+                {c} ({rows.filter((r) => r.campaign === c).length})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <span className="text-sm text-slate-600">
+          <strong className="text-slate-900">{counts.total}</strong> found · {counts.valid} valid ·{" "}
+          {counts.flagged} flagged · {counts.invalid} invalid
+        </span>
+
+        {campaignFilter ? (
+          <>
+            <a
+              href={`/api/admin/outreach/export?campaign=${encodeURIComponent(campaignFilter)}`}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Export CSV
+            </a>
+            <a
+              href={`/api/admin/outreach/export?campaign=${encodeURIComponent(campaignFilter)}&include=all`}
+              className="text-xs text-slate-500 underline hover:text-slate-800"
+              title="Includes rows our validator rejected — for auditing what was filtered out, not for sending"
+            >
+              including invalid
+            </a>
+          </>
+        ) : (
+          <span className="text-xs text-slate-400">Pick a campaign to export it as CSV.</span>
+        )}
+      </div>
+
       {/* Bulk bar. Sticky above the groups so the selection count and the
           actions stay reachable while scrolling a long queue. */}
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
@@ -884,6 +961,8 @@ function ProspectRowItem({
               ? `${row.googleRating.toFixed(1)} ★ · ${row.googleReviewCount ?? 0} reviews · `
               : "No rating · "}
             {statusLabel(row.status)}
+            {" · "}
+            <span className="text-slate-400">{row.campaign}</span>
           </p>
           {/* Shown on the collapsed row, not only inside the editor. After
               a bulk lookup over forty prospects, having to expand each one

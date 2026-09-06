@@ -58,6 +58,7 @@ export default async function AdminPage({
   const prospectRows: ProspectRow[] = allProspects.map((p) => ({
     id: p.id,
     businessName: p.businessName,
+    campaign: p.campaign,
     website: p.website,
     phone: p.phone,
     city: p.city,

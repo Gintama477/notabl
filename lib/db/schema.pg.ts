@@ -379,6 +379,8 @@ export const prospects = pgTable(
     city: text("city"),
     state: text("state"),
     googlePlaceId: text("google_place_id").notNull(),
+    /** Which list this row belongs to. Existing rows backfilled to "notabl-dental". */
+    campaign: text("campaign").notNull().default("notabl-dental"),
     googleRating: doublePrecision("google_rating"),
     googleReviewCount: integer("google_review_count"),
     contactEmail: text("contact_email"),
@@ -397,7 +399,16 @@ export const prospects = pgTable(
     createdAt: createdAt(),
   },
   (t) => ({
-    placeIdUnique: uniqueIndex("prospects_place_id_unique").on(t.googlePlaceId),
+    // Per CAMPAIGN, not globally. A global unique index meant a business
+    // found for one client's list could never be found again for another:
+    // the insert was skipped as a duplicate and the second search just
+    // looked like it underperformed.
+    //
+    // campaign is NOT NULL with a default on purpose. Postgres treats
+    // NULLs as distinct in a unique index, so nullable campaigns would let
+    // two NULL rows share a place id and reintroduce the exact duplicate
+    // this fixes.
+    campaignPlaceIdUnique: uniqueIndex("prospects_campaign_place_id_unique").on(t.campaign, t.googlePlaceId),
     statusIdx: index("prospects_status_idx").on(t.status, t.createdAt),
   })
 );
