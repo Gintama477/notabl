@@ -7,6 +7,7 @@ import { OutreachControls, OutreachQueueTable, ProspectRow } from "@/components/
 import { DeleteBusinessTable, DeletableBusinessRow } from "@/components/admin/DeleteBusiness";
 import { RunAnalysisForBusiness } from "@/components/admin/RunAnalysisForBusiness";
 import { SAMPLE_REPORT_ACCOUNT_EMAIL, getReviewCountForBusiness } from "@/lib/db/queries";
+import { getAlertCandidateBusinesses } from "@/lib/alerts/reviewAlerts";
 
 // Intentionally minimal per the development rule ("do NOT overbuild the
 // admin dashboard") — raw numbers, no charts library, no pagination.
@@ -49,6 +50,10 @@ export default async function AdminPage({
 
   const data = await getAdminOverview();
   const allProspects = await getProspects();
+  // The exact set the daily cron fans out over — the same function it
+  // calls, not a re-implementation of the query, so the two can never
+  // drift and quietly disagree about what is being paid for.
+  const syncedDaily = await getAlertCandidateBusinesses();
 
   const prospectRows: ProspectRow[] = allProspects.map((p) => ({
     id: p.id,
@@ -159,6 +164,45 @@ export default async function AdminPage({
               new Date(b.createdAt).toLocaleDateString(),
             ])}
           />
+        </Section>
+
+        {/* Same "make invisible failures visible" idea as the stalled-run
+            banner below: a fake test practice with 1,007 reviews was
+            re-synced through Outscraper every day for weeks purely because
+            no screen ever showed that it was. A count nobody can miss is
+            the whole fix. */}
+        <Section
+          title={`Synced daily by cron: ${syncedDaily.length} ${syncedDaily.length === 1 ? "business" : "businesses"}`}
+        >
+          <div className="p-4">
+            <p className="text-sm text-slate-600">
+              Every business the daily alerts cron re-imports from Google &mdash; one billed Outscraper fetch
+              each, every day, for as long as it stays on this list. A business appears here when its
+              subscription is <code className="rounded bg-slate-100 px-1.5 py-0.5">active</code> or{" "}
+              <code className="rounded bg-slate-100 px-1.5 py-0.5">trialing</code> <em>and</em> it has a Google
+              review source whose status is <code className="rounded bg-slate-100 px-1.5 py-0.5">active</code>.
+              To take one off, delete the business below, cancel its subscription, or set that review
+              source&apos;s status to something other than active &mdash; stored reviews and generated reports are
+              untouched either way.
+            </p>
+            {syncedDaily.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">
+                Nothing is being synced daily &mdash; no recurring Outscraper spend.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-1 text-sm text-slate-700">
+                {syncedDaily.map((c) => (
+                  <li key={c.businessId}>
+                    <span className="font-medium">{c.businessName}</span>{" "}
+                    <span className="text-slate-500">
+                      &mdash; {c.accountEmail} &mdash; last synced{" "}
+                      {c.lastSyncedAt ? new Date(c.lastSyncedAt).toLocaleDateString() : "never"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </Section>
 
         <Section title="Review Analysis Status">
