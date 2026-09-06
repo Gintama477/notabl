@@ -15,6 +15,7 @@
 // scraped onto several different practices.
 
 import { resolveMx } from "dns/promises";
+import { hostnameOf } from "./findEmail";
 
 export type EmailValidationStatus = "valid" | "flagged" | "invalid";
 
@@ -76,6 +77,70 @@ function isSyntaxValid(email: string): boolean {
 }
 
 /**
+ * Consumer mailbox providers. A small contractor running the business off
+ * Gmail is completely normal, so a domain mismatch against one of these
+ * says nothing — flagging them would bury the real signal under noise.
+ */
+const CONSUMER_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "ymail.com", "outlook.com",
+  "hotmail.com", "live.com", "msn.com", "aol.com", "icloud.com", "me.com",
+  "mac.com", "mail.com", "protonmail.com", "proton.me", "gmx.com", "zoho.com",
+  "comcast.net", "verizon.net", "sbcglobal.net", "att.net", "bellsouth.net",
+  "cox.net", "charter.net", "optonline.net",
+]);
+
+/** Second-level domains that behave like a TLD, so the registrable name is one label further left. */
+const MULTIPART_TLD_SECOND_LEVELS = new Set(["co", "com", "net", "org", "gov", "edu", "ac"]);
+
+/**
+ * The registrable part of a hostname, minus its suffix: "www.foo.co.uk" and
+ * "mail.foo.com" both reduce to "foo". That's the piece worth comparing —
+ * subdomains and TLDs differ constantly between a company's website and its
+ * mail host without meaning anything.
+ */
+function registrableName(hostname: string): string {
+  const labels = hostname.toLowerCase().replace(/^www\./, "").split(".").filter(Boolean);
+  if (labels.length < 2) return labels[0] ?? "";
+  const last = labels[labels.length - 1];
+  const secondLast = labels[labels.length - 2];
+  // foo.co.uk -> "foo"; foo.com -> "foo"
+  if (labels.length >= 3 && MULTIPART_TLD_SECOND_LEVELS.has(secondLast) && last.length <= 3) {
+    return labels[labels.length - 3];
+  }
+  return secondLast;
+}
+
+/** Comparable form: letters and digits only, so hyphens and spacing don't matter. */
+function normalizeName(name: string): string {
+  return name.replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Whether two registrable names plausibly denote the same business.
+ *
+ * Exact and substring matches are the easy cases. The common-prefix rule
+ * exists because real variants aren't substrings of each other:
+ * "jacksonscontractinghvac" vs "jacksonscontractingandhvac" differ by an
+ * inserted word, so neither contains the other, yet they're obviously the
+ * same company. They share a 19-character prefix, which is the signal.
+ */
+function looksLikeSameBusiness(a: string, b: string): boolean {
+  const x = normalizeName(a);
+  const y = normalizeName(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (x.includes(y) || y.includes(x)) return true;
+
+  let shared = 0;
+  const shorter = Math.min(x.length, y.length);
+  while (shared < shorter && x[shared] === y[shared]) shared++;
+  // Long enough in absolute terms AND relative to the shorter name, so
+  // two unrelated companies that merely start with the same few letters
+  // don't get treated as one.
+  return shared >= 6 && shared >= shorter * 0.6;
+}
+
+/**
  * Per-run MX cache. Twenty prospects sharing one practice-group domain
  * should cost one DNS lookup, not twenty — and a verify pass over the
  * whole queue hits the same domains repeatedly.
@@ -131,6 +196,8 @@ export async function validateProspectEmail(
     mx: MxCache;
     blockedAddresses: Set<string>;
     duplicateAddresses?: Set<string>;
+    /** The prospect's own website, for the domain-ownership check below. */
+    website?: string | null;
   }
 ): Promise<EmailValidation | null> {
   const email = (rawEmail ?? "").trim().toLowerCase();
@@ -159,6 +226,29 @@ export async function validateProspectEmail(
 
   if (ROLE_LOCAL_PARTS.has(local)) {
     return { status: "flagged", reason: `Shared inbox (${local}@), not a named person` };
+  }
+
+  // Does the address actually belong to this business?
+  //
+  // Syntax and MX cannot catch this: pixelspread.com is a perfectly real,
+  // mail-receiving domain — it just belongs to the web designer whose
+  // address was scraped out of the client's site footer. Live batch had
+  // matt@pixelspread.com sitting on F & O HVAC (fomechanical.com) and a
+  // billleary.net address on All Week Mechanical, both passing as valid.
+  //
+  // FLAGGED, never invalid: a company with two domains, or one emailing
+  // from a parent company's domain, is legitimate. This means "a human
+  // should glance at this", which is the correct strength of claim.
+  const siteHost = opts.website ? hostnameOf(opts.website) : null;
+  if (siteHost && !CONSUMER_EMAIL_DOMAINS.has(domain)) {
+    const emailName = registrableName(domain);
+    const siteName = registrableName(siteHost);
+    if (siteName && emailName && !looksLikeSameBusiness(emailName, siteName)) {
+      return {
+        status: "flagged",
+        reason: `Email domain (${domain}) doesn't match the business website (${siteHost.replace(/^www\./, "")}) — may belong to a third party.`,
+      };
+    }
   }
 
   return { status: "valid", reason: "Passed syntax, domain and role checks" };

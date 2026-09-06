@@ -1145,7 +1145,7 @@ export async function findAndDraftProspects(opts: {
     // Same rule at creation: Outscraper often returns no email at all, and
     // marking those rows invalid on insert would have made every such
     // prospect unselectable for the lookup that fills them in.
-    const validation = await validateProspectEmail(p.contactEmail, { mx, blockedAddresses });
+    const validation = await validateProspectEmail(p.contactEmail, { mx, blockedAddresses, website: p.website });
 
     await db.insert(prospects).values({
       campaign,
@@ -1294,7 +1294,12 @@ export async function verifyProspectEmails(limit = 200): Promise<VerifyEmailsRes
   const tally = { checked: 0, valid: 0, flagged: 0, invalid: 0, skippedNoEmail: 0 };
 
   for (const row of rows) {
-    const result = await validateProspectEmail(row.contactEmail, { mx, blockedAddresses, duplicateAddresses });
+    const result = await validateProspectEmail(row.contactEmail, {
+      mx,
+      blockedAddresses,
+      duplicateAddresses,
+      website: row.website,
+    });
 
     // No address yet: leave the row UNCHECKED and move on. Writing
     // "invalid" here is what stranded a whole campaign — the queue then
