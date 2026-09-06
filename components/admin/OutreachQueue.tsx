@@ -419,11 +419,19 @@ function isActionable(row: ProspectRow): boolean {
 }
 
 /**
- * Invalid addresses are excluded from bulk selection entirely — visibly,
- * with the reason shown on the row, rather than silently dropped at send
- * time. sendProspectEmail refuses them regardless; this just stops anyone
- * queueing up a send that's going to be refused.
+ * Selectable for ANY bulk action, whatever the validation verdict.
+ *
+ * This deliberately no longer excludes invalid rows. Blocking them here
+ * blocked them from Find emails too — the one operation that FIXES an
+ * invalid row — so a batch verified before its emails were found became
+ * permanently unselectable and needed manual SQL to recover. Being
+ * invalid must block SENDING, not discovery.
  */
+function isSelectable(row: ProspectRow): boolean {
+  return isActionable(row);
+}
+
+/** Send-time rule, applied in sendSelected and enforced again server-side. */
 function isSendable(row: ProspectRow): boolean {
   return isActionable(row) && row.emailValidationStatus !== "invalid";
 }
@@ -478,10 +486,10 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   };
 
   const groups = groupProspectsByCity(visibleRows);
-  const actionable = visibleRows.filter(isSendable);
+  const actionable = visibleRows.filter(isSelectable);
   const selectedRows = actionable.filter((r) => selected.has(r.id));
   const invalidCount = visibleRows.filter((r) => isActionable(r) && r.emailValidationStatus === "invalid").length;
-  const uncheckedCount = visibleRows.filter((r) => isActionable(r) && !r.emailValidationStatus).length;
+  const noEmailCount = visibleRows.filter((r) => isActionable(r) && !r.contactEmail).length;
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -502,7 +510,15 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
         setSummary(data?.error || "Verification failed.");
       } else {
         setSummary(
-          `Checked ${data.checked} address(es) across ${data.domainsLookedUp} domain(s): ${data.valid} valid, ${data.flagged} flagged for review, ${data.invalid} invalid and blocked from sending.`
+          [
+            `Checked ${data.checked} address(es) across ${data.domainsLookedUp} domain(s):`,
+            `${data.valid} valid, ${data.flagged} flagged for review, ${data.invalid} invalid and blocked from sending.`,
+            data.skippedNoEmail > 0
+              ? `${data.skippedNoEmail} skipped (no email yet — run Find emails on those first).`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")
         );
         router.refresh();
       }
@@ -558,8 +574,13 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   }
 
   async function sendSelected() {
-    const sendable = selectedRows.filter((r) => r.contactEmail);
-    const missingEmail = selectedRows.length - sendable.length;
+    // Invalid rows are selectable now (so they can have emails found for
+    // them), which means the send action is where they get filtered out.
+    // sendProspectEmail refuses them server-side regardless.
+    const withEmail = selectedRows.filter((r) => r.contactEmail);
+    const sendable = withEmail.filter(isSendable);
+    const invalidSkipped = withEmail.length - sendable.length;
+    const missingEmail = selectedRows.length - withEmail.length;
     if (sendable.length === 0) {
       setSummary("None of the selected prospects have a contact email yet — find their emails first.");
       return;
@@ -620,6 +641,7 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
         `Sent ${sent} individual email${sent === 1 ? "" : "s"}.`,
         failed > 0 ? `${failed} failed.` : "",
         missingEmail > 0 ? `${missingEmail} skipped (no contact email).` : "",
+        invalidSkipped > 0 ? `${invalidSkipped} skipped (failed validation).` : "",
         stoppedReason ? `Stopped early: ${stoppedReason}` : "",
       ]
         .filter(Boolean)
@@ -707,6 +729,11 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
         >
           {busy === "verifying" ? "Verifying…" : "Verify emails"}
         </button>
+        {noEmailCount > 0 && (
+          <span className="text-xs text-amber-700">
+            {noEmailCount} row(s) have no email yet — Find emails first, or they&apos;ll just be skipped.
+          </span>
+        )}
 
         <button
           type="button"
@@ -736,8 +763,8 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
         <span className="w-full text-xs text-slate-400">
           Every prospect gets their own individual email — never CC&apos;d or BCC&apos;d together. Sends stop
           automatically at the daily cap.
-          {invalidCount > 0 && ` ${invalidCount} address(es) failed validation and can't be selected.`}
-          {uncheckedCount > 0 && ` ${uncheckedCount} not checked yet — run Verify emails first.`}
+          {invalidCount > 0 && ` ${invalidCount} address(es) failed validation and won't be sent to (still selectable, so you can find better addresses for them).`}
+          {noEmailCount > 0 && ` ${noEmailCount} have no email yet — run Find emails on those before Verify.`}
         </span>
       </div>
 
@@ -766,7 +793,7 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
                 expanded={expandedId === r.id}
                 onToggle={() => setExpandedId(expandedId === r.id ? null : r.id)}
                 onChanged={() => router.refresh()}
-                selectable={isSendable(r)}
+                selectable={isSelectable(r)}
                 selected={selected.has(r.id)}
                 onSelectChange={() => toggle(r.id)}
                 disabled={busy !== null}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { hasValidAdminSession } from "@/lib/auth/adminSession";
-import { findEmailForProspect, updateProspectDraft } from "@/lib/db/queries";
+import { findEmailForProspect, updateProspectDraft, clearProspectEmailValidation } from "@/lib/db/queries";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 const FindEmailSchema = z.object({
@@ -59,6 +59,12 @@ export async function POST(req: NextRequest) {
     // already typed in by hand.
     if (parsed.data.save && result.email) {
       await updateProspectDraft(parsed.data.prospectId, { contactEmail: result.email });
+      // Clear any previous verdict. A NEW address must not inherit the old
+      // one's judgement — a row marked invalid for a dead domain would
+      // otherwise stay unsendable after a perfectly good address was
+      // found for it. Nulling it puts the row back to "unchecked" so the
+      // next Verify pass reaches a fresh conclusion.
+      await clearProspectEmailValidation(parsed.data.prospectId);
     }
     return NextResponse.json(result);
   } catch (err) {

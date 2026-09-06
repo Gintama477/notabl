@@ -114,6 +114,17 @@ export type MxCache = ReturnType<typeof createMxCache>;
  * Usually a shared agency, vendor or directory address the scraper picked
  * up from several practice sites.
  */
+/**
+ * Returns null when there is NOTHING TO CHECK — the row has no address
+ * discovered yet. That is not the same as "this address is bad", and
+ * conflating the two was a bug bad enough to strand a whole batch:
+ * verifying a fresh 50-row campaign before running Find emails marked all
+ * 50 "invalid — No email address", the queue then refused to select
+ * invalid rows for Find emails, and the only way out was manual SQL.
+ *
+ * A row with no address is UNCHECKED. Callers must store null, not a
+ * verdict, so it stays eligible for the very operation that would fix it.
+ */
 export async function validateProspectEmail(
   rawEmail: string | null,
   opts: {
@@ -121,9 +132,9 @@ export async function validateProspectEmail(
     blockedAddresses: Set<string>;
     duplicateAddresses?: Set<string>;
   }
-): Promise<EmailValidation> {
+): Promise<EmailValidation | null> {
   const email = (rawEmail ?? "").trim().toLowerCase();
-  if (!email) return { status: "invalid", reason: "No email address" };
+  if (!email) return null;
 
   if (!isSyntaxValid(email)) return { status: "invalid", reason: "Malformed address" };
 

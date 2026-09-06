@@ -1142,12 +1142,15 @@ export async function findAndDraftProspects(opts: {
       senderName: opts.senderName,
     });
 
+    // Same rule at creation: Outscraper often returns no email at all, and
+    // marking those rows invalid on insert would have made every such
+    // prospect unselectable for the lookup that fills them in.
     const validation = await validateProspectEmail(p.contactEmail, { mx, blockedAddresses });
 
     await db.insert(prospects).values({
       campaign,
-      emailValidationStatus: validation.status,
-      emailValidationReason: validation.reason,
+      emailValidationStatus: validation?.status ?? null,
+      emailValidationReason: validation?.reason ?? null,
       businessName: p.businessName,
       website: p.website,
       phone: p.phone,
@@ -1258,6 +1261,8 @@ export type VerifyEmailsResult = {
   valid: number;
   flagged: number;
   invalid: number;
+  /** Rows with no address discovered yet — left unchecked, not rejected. */
+  skippedNoEmail: number;
   domainsLookedUp: number;
 };
 
@@ -1286,10 +1291,20 @@ export async function verifyProspectEmails(limit = 200): Promise<VerifyEmailsRes
     .where(and(ne(prospects.status, "sent"), ne(prospects.status, "demo_sent")))
     .limit(limit);
 
-  const tally = { checked: 0, valid: 0, flagged: 0, invalid: 0 };
+  const tally = { checked: 0, valid: 0, flagged: 0, invalid: 0, skippedNoEmail: 0 };
 
   for (const row of rows) {
     const result = await validateProspectEmail(row.contactEmail, { mx, blockedAddresses, duplicateAddresses });
+
+    // No address yet: leave the row UNCHECKED and move on. Writing
+    // "invalid" here is what stranded a whole campaign — the queue then
+    // refused to select those rows for Find emails, which is the one
+    // operation that would have fixed them.
+    if (!result) {
+      tally.skippedNoEmail++;
+      continue;
+    }
+
     await db
       .update(prospects)
       .set({ emailValidationStatus: result.status, emailValidationReason: result.reason })
@@ -1314,6 +1329,17 @@ export async function getProspectsForExport(campaign: string, includeInvalid = f
     conditions.push(or(isNull(prospects.emailValidationStatus), ne(prospects.emailValidationStatus, "invalid"))!);
   }
   return db.select().from(prospects).where(and(...conditions)).orderBy(desc(prospects.createdAt));
+}
+
+/**
+ * Resets a row to "unchecked" after a new address is stored, so it gets a
+ * fresh verdict instead of inheriting the previous address's.
+ */
+export async function clearProspectEmailValidation(id: string) {
+  await db
+    .update(prospects)
+    .set({ emailValidationStatus: null, emailValidationReason: null })
+    .where(eq(prospects.id, id));
 }
 
 /** Distinct campaigns with their headline counts — what gets reported to a buyer. */
