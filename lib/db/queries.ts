@@ -1088,6 +1088,7 @@ export async function getDashboardData(businessId: string) {
 export async function findAndDraftProspects(opts: {
   city: string;
   state: string;
+  country?: string;
   category?: string;
   /** Which list these rows belong to. Dedupe is scoped to it. */
   campaign?: string;
@@ -1102,6 +1103,7 @@ export async function findAndDraftProspects(opts: {
   const { prospects: found, searchedCount } = await findProspects({
     city: opts.city,
     state: opts.state,
+    country: opts.country,
     category: opts.category,
     limit: opts.limit,
     minRating: opts.minRating,
@@ -1172,7 +1174,7 @@ export async function findAndDraftProspects(opts: {
   await db.insert(automationLogs).values({
     jobName: "outreach-find",
     status: "success",
-    detail: `Campaign "${campaign}": searched "${opts.category?.trim() || "Dentist"}" in ${opts.city}, ${opts.state} — Outscraper returned ${searchedCount} listing(s), ${found.length} passed filters, ${added} newly drafted, ${alreadyExisted} already in this campaign.`,
+    detail: `Campaign "${campaign}": searched "${opts.category?.trim() || "Dentist"}" in ${[opts.city, opts.state, opts.country?.trim() || "US"].filter(Boolean).join(", ")} — Outscraper returned ${searchedCount} listing(s), ${found.length} passed filters, ${added} newly drafted, ${alreadyExisted} already in this campaign.`,
     finishedAt: new Date().toISOString(),
   });
 

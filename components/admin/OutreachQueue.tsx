@@ -33,6 +33,10 @@ export function FindProspectsForm() {
   const router = useRouter();
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  // Free text, defaulting to US on the server when blank. No dropdown:
+  // Outscraper accepts whatever Google Maps accepts, and a country list
+  // here would just be another thing to keep current.
+  const [country, setCountry] = useState("");
   const [category, setCategory] = useState("");
   // Tags every row this search creates. Dedupe is scoped to it, so the
   // same business can be found again for a different client's list.
@@ -67,6 +71,7 @@ export function FindProspectsForm() {
         body: JSON.stringify({
           city,
           state,
+          country: country || undefined,
           category: category || undefined,
           campaign: campaign || undefined,
           limit: limitToSend,
@@ -127,7 +132,14 @@ export function FindProspectsForm() {
         value={state}
         onChange={(e) => setState(e.target.value)}
         placeholder="State (e.g. MA)"
-        required
+        title="Optional — outside the US a state often isn't meaningful"
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-1"
+      />
+      <input
+        value={country}
+        onChange={(e) => setCountry(e.target.value)}
+        placeholder="Country (US)"
+        title="Two-letter country code. Defaults to US when left blank."
         className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-1"
       />
       <input

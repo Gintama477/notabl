@@ -90,6 +90,13 @@ export type FindProspectsResult = {
 export async function findProspects(opts: {
   city: string;
   state: string;
+  /**
+   * Two-letter country code, defaulting to "US" so every existing caller
+   * and campaign behaves exactly as before. Free text on purpose —
+   * Outscraper accepts whatever Google Maps accepts, and a validation
+   * list here would just be a second thing to keep current.
+   */
+  country?: string;
   category?: string;
   limit?: number;
   // Applied AFTER the response is mapped. Outscraper's Maps Search has no
@@ -114,7 +121,17 @@ export async function findProspects(opts: {
   // app/api/admin/outreach/find/route.ts, and the warning under the form's
   // limit input. 20 stays the default when the caller doesn't ask.
   const limit = opts.limit && opts.limit > 0 ? Math.min(opts.limit, 100) : 20;
-  const query = `${category}, ${opts.city}, ${opts.state}, US`;
+  // Country was hardcoded to "US", which silently malformed every
+  // non-US search: "klima servisi, istanbul, tr, US" returned 1 listing
+  // instead of hundreds.
+  //
+  // Empty segments are dropped rather than left as ", ," — outside the US
+  // a state often isn't meaningful (Istanbul is the city AND the
+  // province), and an empty slot in the query is noise Google has to
+  // interpret. With city, state and country all present the string is
+  // byte-identical to what it was before.
+  const country = opts.country?.trim() || "US";
+  const query = [category, opts.city?.trim(), opts.state?.trim(), country].filter(Boolean).join(", ");
 
   const url = new URL(OUTSCRAPER_SEARCH_ENDPOINT);
   url.searchParams.set("query", query);

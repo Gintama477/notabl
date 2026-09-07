@@ -7,7 +7,10 @@ import { getSiteUrl } from "@/lib/siteUrl";
 
 const FindSchema = z.object({
   city: z.string().min(1).max(120),
-  state: z.string().min(1).max(60),
+  // Optional: outside the US a state often isn't meaningful, and
+  // requiring one made non-US searches impossible to submit.
+  state: z.string().max(60).optional().or(z.literal("")),
+  country: z.string().max(60).optional().or(z.literal("")),
   category: z.string().max(80).optional().or(z.literal("")),
   campaign: z.string().max(80).optional().or(z.literal("")),
   limit: z.number().int().min(1).max(100).optional(),
@@ -72,7 +75,8 @@ export async function POST(req: NextRequest) {
   try {
     const result = await findAndDraftProspects({
       city: parsed.data.city,
-      state: parsed.data.state,
+      state: parsed.data.state ?? "",
+      country: parsed.data.country || undefined,
       category: parsed.data.category || undefined,
       campaign: parsed.data.campaign || undefined,
       limit: parsed.data.limit,
