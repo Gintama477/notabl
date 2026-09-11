@@ -515,29 +515,60 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
   async function verifyEmails() {
     setBusy("verifying");
     setSummary(null);
+    // The endpoint checks a bounded batch per call, so one request only
+    // ever did part of the job. It reported success regardless, which is
+    // how a campaign sat 85/96 unverified for two days. Loop until the
+    // server says nothing is left.
+    const MAX_BATCHES = 60;
+    const totals = { processed: 0, valid: 0, flagged: 0, invalid: 0, unchecked: 0 };
+    let remaining = 0;
+
     try {
-      const res = await fetch("/api/admin/outreach/verify-emails", { method: "POST" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        setSummary(data?.error || "Verification failed.");
-      } else {
-        setSummary(
-          [
-            `Checked ${data.checked} address(es) across ${data.domainsLookedUp} domain(s):`,
-            `${data.valid} valid, ${data.flagged} flagged for review, ${data.invalid} invalid and blocked from sending.`,
-            data.skippedNoEmail > 0
-              ? `${data.skippedNoEmail} skipped (no email yet — run Find emails on those first).`
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" ")
-        );
-        router.refresh();
+      for (let batch = 0; batch < MAX_BATCHES; batch++) {
+        // Only the first call retries rows a previous run couldn't
+        // determine — so one click gives them one more chance without the
+        // loop being able to cycle on a permanently failing domain.
+        const res = await fetch(`/api/admin/outreach/verify-emails${batch === 0 ? "?retryUnchecked=1" : ""}`, {
+          method: "POST",
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          setSummary(
+            `${data?.error || "Verification failed."} Checked ${totals.processed} so far — click Verify again to continue.`
+          );
+          return;
+        }
+
+        totals.processed += data.processed;
+        totals.valid += data.valid;
+        totals.flagged += data.flagged;
+        totals.invalid += data.invalid;
+        totals.unchecked += data.unchecked;
+        remaining = data.remaining;
+
+        setProgress({ done: totals.processed, total: totals.processed + remaining });
+
+        // processed === 0 with rows still remaining would mean no forward
+        // progress; stopping beats looping sixty times to no effect.
+        if (remaining === 0 || data.processed === 0) break;
       }
+
+      setSummary(
+        [
+          `Checked ${totals.processed}:`,
+          `${totals.valid} valid, ${totals.flagged} flagged, ${totals.invalid} invalid.`,
+          totals.unchecked > 0 ? `${totals.unchecked} couldn't be determined (DNS failure) — Verify again to retry those.` : "",
+          remaining > 0 ? `${remaining} still pending — click Verify again.` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+      router.refresh();
     } catch {
-      setSummary("Verification failed.");
+      setSummary(`Verification failed after ${totals.processed} checked — click Verify again to continue.`);
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   }
 
@@ -768,7 +799,7 @@ export function OutreachQueueTable({ rows }: { rows: ProspectRow[] }) {
         {progress && (
           <span className="text-xs text-slate-500">
             {progress.done} of {progress.total}
-            {busy === "finding" ? " looked up (~45s each, 3 at a time)" : " sent"}
+            {busy === "finding" ? " looked up (~45s each, 3 at a time)" : busy === "verifying" ? " checked" : " sent"}
           </span>
         )}
         {summary && <span className="text-xs text-slate-600">{summary}</span>}

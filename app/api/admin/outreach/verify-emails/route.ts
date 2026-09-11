@@ -15,16 +15,21 @@ import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 // walk the whole table.
 export const maxDuration = 60;
 
-// Comfortably inside the budget: MX lookups are fast (tens of ms) and
-// cached per domain, so a few hundred rows sharing a handful of domains
-// costs very little. Sized well under what 60s allows.
-const VERIFY_BATCH_SIZE = 200;
+// 25, not 200. A DNS/MX lookup is a network call, and ninety-odd of them
+// sequentially do not finish inside the 60s Hobby ceiling — the function
+// was killed mid-run, rows already written kept their status, the rest
+// stayed NULL, and the client reported success because it never learned
+// the function died. A small batch that reliably completes, called
+// repeatedly by the client until `remaining` hits zero, is the fix.
+const VERIFY_BATCH_SIZE = 25;
 
 export async function POST(req: NextRequest) {
   const authorized = await hasValidAdminSession();
   if (!authorized) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
 
-  const rateLimit = checkRateLimit(`admin-outreach-verify:${getClientIp(req)}`, 20, 10 * 60 * 1000);
+  // Raised: the client now loops one request per 25 rows, so a single
+  // Verify click on a 300-row queue is a dozen requests, not one.
+  const rateLimit = checkRateLimit(`admin-outreach-verify:${getClientIp(req)}`, 200, 10 * 60 * 1000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Too many verification runs. Please try again later." },
@@ -36,7 +41,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await verifyProspectEmails(VERIFY_BATCH_SIZE);
+    const retryUnchecked = req.nextUrl.searchParams.get("retryUnchecked") === "1";
+    const result = await verifyProspectEmails({ limit: VERIFY_BATCH_SIZE, retryUnchecked });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error("verifyProspectEmails failed:", err);

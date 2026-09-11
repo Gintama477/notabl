@@ -17,7 +17,13 @@
 import { resolveMx } from "dns/promises";
 import { hostnameOf } from "./findEmail";
 
-export type EmailValidationStatus = "valid" | "flagged" | "invalid";
+/**
+ * "unchecked" means WE TRIED AND COULDN'T TELL — a DNS lookup threw or
+ * timed out. Deliberately distinct from NULL, which means never attempted.
+ * Collapsing the two is what hid a broken verification run for two days:
+ * every killed row looked identical to a row that was simply next in line.
+ */
+export type EmailValidationStatus = "valid" | "flagged" | "invalid" | "unchecked";
 
 export type EmailValidation = {
   status: EmailValidationStatus;

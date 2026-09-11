@@ -31,7 +31,7 @@ import { DEFAULT_PLAN, PLANS } from "@/config/pricing";
 import { slugifyBusinessName, randomSlugSuffix } from "@/lib/reviews/slug";
 import { getAIProvider } from "@/lib/ai/provider";
 import { findProspects } from "@/lib/outreach/findProspects";
-import { createMxCache, validateProspectEmail } from "@/lib/outreach/validateEmail";
+import { createMxCache, validateProspectEmail, type EmailValidation } from "@/lib/outreach/validateEmail";
 import { fetchDomainEmails, pickBestEmail, hostnameOf } from "@/lib/outreach/findEmail";
 import { buildOutreachEmailSubject, buildOutreachDraftBody, buildOutreachEmailHtml, buildOutreachEmailText } from "@/lib/email/templates/outreachEmail";
 import { sendOutreachEmail } from "@/lib/email/send";
@@ -1259,12 +1259,15 @@ async function getDuplicateProspectAddresses(): Promise<Set<string>> {
 }
 
 export type VerifyEmailsResult = {
-  checked: number;
+  /** Rows attempted in THIS batch. */
+  processed: number;
   valid: number;
   flagged: number;
   invalid: number;
-  /** Rows with no address discovered yet — left unchecked, not rejected. */
-  skippedNoEmail: number;
+  /** Attempted but undeterminable (DNS threw/timed out). */
+  unchecked: number;
+  /** Still awaiting a first check after this batch — drives the client loop. */
+  remaining: number;
   domainsLookedUp: number;
 };
 
@@ -1280,47 +1283,103 @@ export type VerifyEmailsResult = {
  * pass. Same rule as everywhere else: one request does a bounded amount of
  * work.
  */
-export async function verifyProspectEmails(limit = 200): Promise<VerifyEmailsResult> {
+export async function verifyProspectEmails(
+  opts: { limit?: number; retryUnchecked?: boolean } = {}
+): Promise<VerifyEmailsResult> {
+  const limit = opts.limit ?? 25;
+
+  // An explicit Verify click retries rows a previous run couldn't
+  // determine, once. Done by resetting them to NULL up front rather than
+  // by widening the selection below, which would let a permanently
+  // failing domain keep re-entering the batch and stop the client loop
+  // ever reaching zero.
+  if (opts.retryUnchecked) {
+    await db
+      .update(prospects)
+      .set({ emailValidationStatus: null, emailValidationReason: null })
+      .where(eq(prospects.emailValidationStatus, "unchecked"));
+  }
+
   const [blockedAddresses, duplicateAddresses] = await Promise.all([
     getBlockedOutreachAddresses(),
     getDuplicateProspectAddresses(),
   ]);
   const mx = createMxCache();
 
+  // Only rows that have never been checked AND actually have an address.
+  //
+  // The previous version selected every non-sent row with no ORDER BY and
+  // a limit of 200. That re-validated rows already done — burning the 60s
+  // budget on finished work — and, without an order, returned an
+  // arbitrary subset each time, so clicking Verify again processed much
+  // the same rows instead of advancing. Deterministic order plus a
+  // NULL-only filter is what makes repeated calls converge.
+  const pendingWhere = and(
+    isNull(prospects.emailValidationStatus),
+    isNotNull(prospects.contactEmail),
+    ne(prospects.status, "sent"),
+    ne(prospects.status, "demo_sent")
+  );
+
   const rows = await db
     .select()
     .from(prospects)
-    .where(and(ne(prospects.status, "sent"), ne(prospects.status, "demo_sent")))
+    .where(pendingWhere)
+    .orderBy(prospects.createdAt, prospects.id)
     .limit(limit);
 
-  const tally = { checked: 0, valid: 0, flagged: 0, invalid: 0, skippedNoEmail: 0 };
+  const tally = { processed: 0, valid: 0, flagged: 0, invalid: 0, unchecked: 0 };
+  const failures: string[] = [];
 
   for (const row of rows) {
-    const result = await validateProspectEmail(row.contactEmail, {
-      mx,
-      blockedAddresses,
-      duplicateAddresses,
-      website: row.website,
-    });
+    let result: EmailValidation | null = null;
+    try {
+      result = await validateProspectEmail(row.contactEmail, {
+        mx,
+        blockedAddresses,
+        duplicateAddresses,
+        website: row.website,
+      });
+    } catch (err) {
+      // NEVER leave the row NULL after an attempt. A row that was tried
+      // and failed must be distinguishable from one that was never
+      // reached — that distinction is the entire bug this fixes.
+      result = { status: "unchecked", reason: `Check failed: ${String(err).slice(0, 120)}` };
+      failures.push(`${row.businessName}: ${String(err).slice(0, 80)}`);
+    }
 
-    // No address yet: leave the row UNCHECKED and move on. Writing
-    // "invalid" here is what stranded a whole campaign — the queue then
-    // refused to select those rows for Find emails, which is the one
-    // operation that would have fixed them.
+    // The query guarantees contact_email is present, so a null result
+    // here would mean the address vanished between select and check.
     if (!result) {
-      tally.skippedNoEmail++;
-      continue;
+      result = { status: "unchecked", reason: "No address at check time" };
     }
 
     await db
       .update(prospects)
       .set({ emailValidationStatus: result.status, emailValidationReason: result.reason })
       .where(eq(prospects.id, row.id));
-    tally.checked++;
+    tally.processed++;
     tally[result.status]++;
   }
 
-  return { ...tally, domainsLookedUp: mx.size };
+  const stillPending = await db.select({ id: prospects.id }).from(prospects).where(pendingWhere);
+  const remaining = stillPending.length;
+
+  // Logged every run. Nothing was written down before, which is precisely
+  // why a verification that only ever completed part of a campaign went
+  // unnoticed for two days.
+  await db.insert(automationLogs).values({
+    jobName: "outreach-verify",
+    status: tally.unchecked > 0 ? "warning" : "success",
+    detail:
+      `Attempted ${tally.processed} (limit ${limit}): ${tally.valid} valid, ${tally.flagged} flagged, ` +
+      `${tally.invalid} invalid, ${tally.unchecked} undeterminable. ${remaining} still awaiting a first check. ` +
+      `${mx.size} domain(s) looked up.` +
+      (failures.length > 0 ? ` Failures: ${failures.slice(0, 5).join(" | ")}` : ""),
+    finishedAt: new Date().toISOString(),
+  });
+
+  return { ...tally, remaining, domainsLookedUp: mx.size };
 }
 
 /**
