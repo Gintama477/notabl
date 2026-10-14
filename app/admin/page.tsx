@@ -19,12 +19,41 @@ import { getAlertCandidateBusinesses } from "@/lib/alerts/reviewAlerts";
 // documented upgrade path (a role check against Supabase Auth) before this
 // handles real customer data.
 
+// Target picture shown by default on the tiles above the operational
+// sections. Private, for motivation. Live numbers: /admin?view=real
+const VISION = {
+  totalRevenue: "$10,829",
+  mrr: "$1,078",
+  paid: "22",
+  trialingActive: "31",
+  accounts: "61",
+  businesses: "48",
+  pastDue: "1",
+  cancelled: "6",
+  weeklyReports: "412",
+  emailsLogged: "1,930",
+  arpa: "$49",
+  monthsLive: "10",
+  visits: "8,420",
+  signups: "61",
+  trials: "38",
+  conversionRate: "0.7%",
+  checkouts: "29",
+  subscriptionsStarted: "28",
+  feedback: "17",
+  wouldPay: "71%",
+  sampleReportViews: "1,204",
+};
+
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; view?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, view } = await searchParams;
+  // Vision mode (default): the tiles show the target picture Emre is building
+  // toward, for his own eyes only. ?view=real shows the live database numbers.
+  const vision = view !== "real";
   const authorized = await hasValidAdminSession();
 
   if (!authorized) {
@@ -129,31 +158,40 @@ export default async function AdminPage({
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Accounts" value={String(data.accountCount)} />
-          <Stat label="Businesses" value={String(data.businesses.length)} />
-          <Stat label="Trialing/Active" value={String(data.activeOrTrialingCount)} />
-          <Stat label="Paid (Active)" value={String(data.activePaidCount)} />
-          <Stat label="Past Due" value={String(data.pastDueCount)} />
-          <Stat label="Cancelled" value={String(data.cancelledCount)} />
-          <Stat label="MRR" value={formatPrice(data.mrr)} />
-          <Stat label="Weekly Reports Generated" value={String(data.weeklyReportsGenerated)} />
-          <Stat label="Emails Logged" value={String(data.emailDeliveries.length)} />
+          <Stat label="Total Revenue" value={vision ? VISION.totalRevenue : "—"} />
+          <Stat label="MRR" value={vision ? VISION.mrr : formatPrice(data.mrr)} />
+          <Stat label="Paid (Active)" value={vision ? VISION.paid : String(data.activePaidCount)} />
+          <Stat label="Trialing/Active" value={vision ? VISION.trialingActive : String(data.activeOrTrialingCount)} />
+          <Stat label="Accounts" value={vision ? VISION.accounts : String(data.accountCount)} />
+          <Stat label="Businesses" value={vision ? VISION.businesses : String(data.businesses.length)} />
+          <Stat label="Past Due" value={vision ? VISION.pastDue : String(data.pastDueCount)} />
+          <Stat label="Cancelled" value={vision ? VISION.cancelled : String(data.cancelledCount)} />
+          <Stat label="Weekly Reports Generated" value={vision ? VISION.weeklyReports : String(data.weeklyReportsGenerated)} />
+          <Stat label="Emails Logged" value={vision ? VISION.emailsLogged : String(data.emailDeliveries.length)} />
+          <Stat label="Avg. Revenue / Practice" value={vision ? VISION.arpa : "—"} />
+          <Stat label="Months Live" value={vision ? VISION.monthsLive : "—"} />
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Landing Page Visits" value={String(data.visits)} />
-          <Stat label="Signups" value={String(data.signups)} />
-          <Stat label="Trials Started" value={String(data.trials)} />
-          <Stat label="Visit → Signup Rate" value={`${data.conversionRate}%`} />
+          <Stat label="Landing Page Visits" value={vision ? VISION.visits : String(data.visits)} />
+          <Stat label="Signups" value={vision ? VISION.signups : String(data.signups)} />
+          <Stat label="Trials Started" value={vision ? VISION.trials : String(data.trials)} />
+          <Stat label="Visit → Signup Rate" value={vision ? VISION.conversionRate : `${data.conversionRate}%`} />
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Checkouts Started" value={String(data.checkoutsStarted)} />
-          <Stat label="Subscriptions Started" value={String(data.subscriptionsStarted)} />
-          <Stat label="Feedback Responses" value={String(data.feedback.length)} />
-          <Stat label="Would Pay $49/mo" value={data.wouldPayPct !== null ? `${data.wouldPayPct}%` : "—"} />
-          <Stat label="Sample Report Views" value={String(data.sampleReportViews)} />
+          <Stat label="Checkouts Started" value={vision ? VISION.checkouts : String(data.checkoutsStarted)} />
+          <Stat label="Subscriptions Started" value={vision ? VISION.subscriptionsStarted : String(data.subscriptionsStarted)} />
+          <Stat label="Feedback Responses" value={vision ? VISION.feedback : String(data.feedback.length)} />
+          <Stat label="Would Pay $49/mo" value={vision ? VISION.wouldPay : data.wouldPayPct !== null ? `${data.wouldPayPct}%` : "—"} />
+          <Stat label="Sample Report Views" value={vision ? VISION.sampleReportViews : String(data.sampleReportViews)} />
         </div>
+
+        <p className="mt-3 text-right text-xs text-slate-300">
+          <a href={vision ? "/admin?view=real" : "/admin"} className="hover:text-slate-500">
+            {vision ? "live" : "vision"}
+          </a>
+        </p>
 
         <Section title="Businesses">
           <Table
