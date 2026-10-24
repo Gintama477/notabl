@@ -170,6 +170,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, action, ...result });
     }
 
+    if (action === "renarrate") {
+      // Regenerates only the written report (narrative + theme selection)
+      // from the existing analysis — no Outscraper, no re-extraction. Keeps
+      // the token so the URL stays the same. ?campaign= or ?id=
+      const id = q.get("id");
+      const campaign = q.get("campaign");
+      const rows = await db
+        .select({ id: prospects.id, businessId: prospects.reportBusinessId })
+        .from(prospects)
+        .where(and(eq(prospects.status, "ready"), id ? eq(prospects.id, id) : campaign ? eq(prospects.campaign, campaign) : sql`false`));
+      for (const r of rows) {
+        if (!r.businessId) continue;
+        await db.delete(weeklyReports).where(eq(weeklyReports.businessId, r.businessId));
+        await db.update(prospects).set({ status: "building", reportViewCount: 0, reportFirstViewedAt: null }).where(eq(prospects.id, r.id));
+      }
+      return NextResponse.json({ ok: true, action, queued: rows.length });
+    }
+
     if (action === "set-status") {
       // Hand-recorded reply or skip: ?id=&status=skipped|sent&reply=interested|not_interested|remove
       const id = q.get("id");
@@ -191,7 +209,6 @@ export async function GET(req: NextRequest) {
       const reviewsLimit = Number(q.get("reviews")) || DEFAULT_PROSPECT_REVIEWS_LIMIT;
       const where = and(
         inArray(prospects.status, [...SELECTABLE]),
-        isNull(prospects.reportToken),
         ids?.length ? inArray(prospects.id, ids) : campaign ? eq(prospects.campaign, campaign) : sql`false`
       );
       // "building" first so one prospect is finished before the next starts.
@@ -245,7 +262,7 @@ export async function GET(req: NextRequest) {
         await db.update(prospects).set({ status: "skipped", skipReason: `only ${n} reviews imported` }).where(eq(prospects.id, p.id));
         return NextResponse.json({ ok: true, action, done: false, prospect: p.businessName, step: "skipped-too-few", reviews: n });
       }
-      const token = newReportToken();
+      const token = p.reportToken ?? newReportToken();
       await db
         .update(prospects)
         .set({ reportToken: token, reportBuiltAt: new Date().toISOString(), reportReviewCount: n, status: "ready" })
