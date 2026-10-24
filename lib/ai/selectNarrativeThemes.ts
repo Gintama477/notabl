@@ -18,6 +18,7 @@ import { ThemeRollupResult } from "./computeTrends";
 const TOP_POSITIVE_LIMIT = 4;
 /** How many under-used strengths "Opportunities" shows. */
 const OPPORTUNITY_LIMIT = 3;
+const RECURRING_NEGATIVE_MIN = 3;
 const TOP_NEGATIVE_LIMIT = 4;
 const EMERGING_LIMIT = 5;
 
@@ -44,8 +45,14 @@ export function selectNarrativeThemes(themes: ThemeRollupResult[]): NarrativeSel
   // praised 34 times and criticized 3 is a strength, and listing it as a
   // complaint is the "calls praise a problem" bug this rule exists to
   // prevent.
+  // ...but a theme criticized 8 times and praised 18 is ALSO something the
+  // owner needs to see — "Top Negative Themes: none found" on a 3.9-star
+  // business reads as broken. So: a theme qualifies when complaints
+  // outnumber praise, OR when there are at least RECURRING_NEGATIVE_MIN
+  // complaints in absolute terms. The model's summary states both counts,
+  // so a mixed theme is never presented as pure complaint.
   const topNegativeThemes = themes
-    .filter((t) => t.negativeCount > 0 && t.negativeCount >= t.positiveCount)
+    .filter((t) => t.negativeCount > 0 && (t.negativeCount >= t.positiveCount || t.negativeCount >= RECURRING_NEGATIVE_MIN))
     .sort((a, b) => b.negativeCount - a.negativeCount)
     .slice(0, TOP_NEGATIVE_LIMIT);
 
