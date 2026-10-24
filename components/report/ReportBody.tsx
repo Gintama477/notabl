@@ -42,6 +42,7 @@ export function ReportBody({
   possiblyTruncated = false,
   excerptsByTheme = {},
   allReviewsHref,
+  hideChanges = false,
 }: {
   businessName: string;
   report: ReportRow;
@@ -66,6 +67,9 @@ export function ReportBody({
   // public /sample-report page (also rendered by this component) must
   // never link to a dashboard route, so it simply omits this prop.
   allReviewsHref?: string;
+  // First-ever report (report-first outreach): there is no last report, so
+  // the comparison section would only confuse the reader.
+  hideChanges?: boolean;
 }) {
   const topPositiveThemes: ThemeRef[] = JSON.parse(report.topPositiveThemesJson);
   const topNegativeThemes: ThemeRef[] = JSON.parse(report.topNegativeThemesJson);
@@ -132,6 +136,7 @@ export function ReportBody({
           excerptsByTheme={excerptsByTheme}
         />
 
+        {hideChanges ? null : (
         <section>
           {/* This section describes something genuinely real — a comparison
               against the previous snapshot — so it stays. It just says
@@ -149,6 +154,7 @@ export function ReportBody({
             </ul>
           )}
         </section>
+        )}
 
         <section>
           <h2 className="font-serif text-lg font-semibold text-slate-900">Recommended Actions</h2>

@@ -60,6 +60,7 @@ export default async function ProspectReportPage({ params }: { params: Promise<{
           sampleReviews={sampleReviews}
           totalReviews={totalReviews}
           excerptsByTheme={excerptsByTheme}
+          hideChanges
         />
         <p className="mt-8 text-center text-xs text-slate-400">
           Built by Notabl from public Google reviews. Themes and quotes are drawn from the reviews themselves; AI-written

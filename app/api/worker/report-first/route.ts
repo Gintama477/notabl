@@ -26,6 +26,7 @@ function denied(req: NextRequest) {
 }
 
 const SELECTABLE = ["drafted", "building"] as const;
+const PROSPECT_PERIOD_DAYS = 3650;
 
 export async function GET(req: NextRequest) {
   const d = denied(req);
@@ -133,6 +134,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, action, count: rows.length, rows });
     }
 
+    if (action === "rebuild") {
+      // Throws away a prospect's analysis + report (reviews stay imported,
+      // so no Outscraper cost) and queues it to be built again.
+      const id = q.get("id");
+      if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+      const [p] = await db.select().from(prospects).where(eq(prospects.id, id)).limit(1);
+      if (!p?.reportBusinessId) return NextResponse.json({ error: "no report business" }, { status: 400 });
+      await pgClient.unsafe(`delete from analysis_runs where business_id = $1`, [p.reportBusinessId]);
+      await pgClient.unsafe(`update reviews set analyzed_at = null, analyzed_with = null where business_id = $1`, [p.reportBusinessId]);
+      await db.update(prospects).set({ reportToken: null, reportBuiltAt: null, reportReviewCount: null, reportViewCount: 0, reportFirstViewedAt: null, status: "building" }).where(eq(prospects.id, id));
+      return NextResponse.json({ ok: true, action, id, prospect: p.businessName });
+    }
+
     if (action === "set-status") {
       // Hand-recorded reply or skip: ?id=&status=skipped|sent&reply=interested|not_interested|remove
       const id = q.get("id");
@@ -174,7 +188,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ ok: true, action, done: false, prospect: p.businessName, step: "import", ...imported });
       }
 
-      const result = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString(), 90);
+      // 3650-day period: the "prior" snapshot is empty, so a prospect's
+      // first (and only) report carries no "up from N since your last
+      // report" comparisons — there is no last report, and the page is
+      // read by someone who has never seen one.
+      const result = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString(), PROSPECT_PERIOD_DAYS);
       if (result.reviewsRemaining > 0) {
         return NextResponse.json({ ok: true, action, done: false, prospect: p.businessName, step: "analysis", remaining: result.reviewsRemaining, analyzed: result.reviewsNewlyAnalyzed });
       }

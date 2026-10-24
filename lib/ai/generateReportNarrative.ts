@@ -35,10 +35,22 @@ export async function generateWeeklyNarrative(
   // The selection travels inside the data blob rather than as a new
   // argument, so nothing about the AIProvider interface changes and the
   // demo provider reads exactly the same field the prompt does.
+  // A first-ever report (every prior count is zero — e.g. the report-first
+  // outreach builds, lib/outreach/prospectReport.ts) has no "last report"
+  // to compare against. Saying so in the data stops the model writing
+  // "up from 0 since your last report" to someone who has never seen one.
+  const isFirstReport = rollups.length > 0 && rollups.every((r) => r.priorMentionCount === 0);
   const structuredRollupJson = JSON.stringify({
     themes: rollups,
     totalReviews,
     selection,
+    ...(isFirstReport
+      ? {
+          firstReport: true,
+          firstReportInstruction:
+            "This is the FIRST report for this business — there is no previous report. Describe every count as a total only. Never write 'since your last report', 'up from', 'previously', 'increased', 'grew' or any before/after comparison anywhere. changesFromLastPeriod must be an empty array.",
+        }
+      : {}),
   });
 
   // Used only for themes the model failed to write about. Plain, accurate,
