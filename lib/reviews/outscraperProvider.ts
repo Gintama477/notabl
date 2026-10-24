@@ -97,7 +97,7 @@ export class OutscraperReviewProvider implements ReviewDataProvider {
   name = "google" as const;
   label = "Google reviews (via Outscraper — temporary, see docs/REVIEW-DATA-PROVIDERS.md)";
 
-  async fetchReviews(opts: { businessName: string; sourceUrl?: string | null }): Promise<ReviewRecord[]> {
+  async fetchReviews(opts: { businessName: string; sourceUrl?: string | null; reviewsLimit?: number }): Promise<ReviewRecord[]> {
     const placeId = opts.sourceUrl;
     if (!placeId) {
       throw new Error(
@@ -112,7 +112,8 @@ export class OutscraperReviewProvider implements ReviewDataProvider {
 
     const url = new URL(OUTSCRAPER_ENDPOINT);
     url.searchParams.set("query", placeId);
-    url.searchParams.set("reviewsLimit", String(OUTSCRAPER_REVIEWS_LIMIT));
+    const reviewsLimit = Math.min(OUTSCRAPER_REVIEWS_LIMIT, Math.max(1, Math.floor(opts.reviewsLimit ?? OUTSCRAPER_REVIEWS_LIMIT)));
+    url.searchParams.set("reviewsLimit", String(reviewsLimit));
     url.searchParams.set("language", "en");
     url.searchParams.set("async", "false");
     // Best-effort request for newest-first SELECTION when the limit above

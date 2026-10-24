@@ -274,7 +274,12 @@ export async function isPlaceIdAlreadyTrialedByAnotherAccount(businessId: string
  * externalReviewId) same as every other import path — re-syncing the same
  * practice just picks up new reviews since the last sync.
  */
-export async function connectGoogleReviewSource(businessId: string, businessName: string, placeId: string) {
+export async function connectGoogleReviewSource(
+  businessId: string,
+  businessName: string,
+  placeId: string,
+  opts: { reviewsLimit?: number } = {}
+) {
   // One real business, one Place ID, ever — regardless of which account or
   // email connects it. Without this, two different accounts (e.g. a
   // second, unauthorized signup for the same practice) could both start
@@ -285,7 +290,23 @@ export async function connectGoogleReviewSource(businessId: string, businessName
     .where(and(eq(reviewSources.sourceType, "google"), eq(reviewSources.sourceUrl, placeId), ne(reviewSources.businessId, businessId)))
     .limit(1);
   if (claimedByOtherBusiness) {
-    throw new BusinessAlreadyClaimedError();
+    // Report-first outreach (lib/outreach/prospectReport.ts) builds a
+    // throwaway business per prospect so a report can be made from their
+    // public reviews BEFORE they sign up. That throwaway must never block
+    // the real practice's own signup — so if the claimant is a prospect
+    // business, release it (delete it; everything cascades) and carry on.
+    const [claimant] = await db
+      .select({ businessId: businesses.id, role: accounts.role })
+      .from(businesses)
+      .innerJoin(accounts, eq(businesses.accountId, accounts.id))
+      .where(eq(businesses.id, claimedByOtherBusiness.businessId))
+      .limit(1);
+    if (claimant && claimant.role === "prospect") {
+      await db.update(prospects).set({ reportBusinessId: null }).where(eq(prospects.reportBusinessId, claimant.businessId));
+      await db.delete(businesses).where(eq(businesses.id, claimant.businessId));
+    } else {
+      throw new BusinessAlreadyClaimedError();
+    }
   }
 
   const [existingSource] = await db
@@ -321,7 +342,7 @@ export async function connectGoogleReviewSource(businessId: string, businessName
   // slow external HTTP call, and holding a DB transaction open across it
   // is worse practice than just not writing anything until there's real
   // data to write.
-  const fetched = await getReviewDataProvider("google").fetchReviews({ businessName, sourceUrl: placeId });
+  const fetched = await getReviewDataProvider("google").fetchReviews({ businessName, sourceUrl: placeId, reviewsLimit: opts.reviewsLimit });
 
   // Exactly the provider's per-request cap means there are probably more
   // reviews on the actual listing than we imported — see
@@ -329,7 +350,7 @@ export async function connectGoogleReviewSource(businessId: string, businessName
   // Recorded unconditionally on every sync (not just the first) so this
   // stays accurate if the practice's review count grows past the cap
   // later, or drops back under it after Outscraper's own data changes.
-  const possiblyTruncated = fetched.length >= OUTSCRAPER_REVIEWS_LIMIT;
+  const possiblyTruncated = fetched.length >= Math.min(OUTSCRAPER_REVIEWS_LIMIT, opts.reviewsLimit ?? OUTSCRAPER_REVIEWS_LIMIT);
 
   let source = existingSource;
   if (!source) {

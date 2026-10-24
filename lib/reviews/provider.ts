@@ -40,7 +40,9 @@ export interface ReviewDataProvider {
   // (e.g. a Google Business Profile URL) — demo/manual providers ignore it.
   // Must throw a clear Error rather than return an empty array on failure,
   // so callers can distinguish "no reviews yet" from "the fetch broke."
-  fetchReviews(opts: { businessName: string; sourceUrl?: string | null }): Promise<ReviewRecord[]>;
+  // reviewsLimit: optional cap on how many (newest-first) reviews to fetch.
+  // Providers that bill per review (Outscraper) honour it; demo/manual ignore it.
+  fetchReviews(opts: { businessName: string; sourceUrl?: string | null; reviewsLimit?: number }): Promise<ReviewRecord[]>;
 }
 
 // ---------------------------------------------------------------------------

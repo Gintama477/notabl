@@ -384,6 +384,8 @@ export const prospects = pgTable(
     googleRating: doublePrecision("google_rating"),
     googleReviewCount: integer("google_review_count"),
     contactEmail: text("contact_email"),
+    /** Column exists in production (added by hand before this file caught up). */
+    contactFirstName: text("contact_first_name"),
     // "valid" | "flagged" | "invalid", from lib/outreach/validateEmail.ts.
     // Null means never checked — rows created before validation existed.
     // sendProspectEmail refuses "invalid" regardless of what any UI shows;
@@ -396,6 +398,20 @@ export const prospects = pgTable(
     status: text("status").notNull().default("drafted"),
     sentAt: text("sent_at"),
     skipReason: text("skip_reason"),
+    // --- Report-first outreach (24 Oct 2026). A real report is built from the
+    // prospect's own public Google reviews BEFORE the first email, and the
+    // email links to it. See lib/outreach/prospectReport.ts.
+    /** The throwaway businesses row holding the imported reviews + report. Owned by a role="prospect" account. */
+    reportBusinessId: text("report_business_id"),
+    /** Unguessable token for the public /report/[token] page. */
+    reportToken: text("report_token").unique(),
+    reportBuiltAt: text("report_built_at"),
+    reportReviewCount: integer("report_review_count"),
+    reportViewCount: integer("report_view_count").notNull().default(0),
+    reportFirstViewedAt: text("report_first_viewed_at"),
+    followupSentAt: text("followup_sent_at"),
+    /** Set by hand when a reply comes in: "interested" | "not_interested" | "remove". Stops follow-ups. */
+    replyStatus: text("reply_status"),
     createdAt: createdAt(),
   },
   (t) => ({
@@ -498,3 +514,100 @@ export const reviewReplies = pgTable("review_replies", {
   draftText: text("draft_text").notNull(),
   createdAt: createdAt(),
 });
+
+// ---------------------------------------------------------------------------
+// Consent log (22 Sep hub decision: the AI never cold-calls)
+//
+// One table for every consent regardless of where it came from — the web
+// form and a DM both land here. Two tables would mean two places to check
+// before dialling, and the one that gets forgotten is the one that matters.
+//
+// APPEND-ONLY BY CONVENTION. A revocation sets revokedAt on the grant AND
+// writes a suppressions row; it never deletes. The grant has to stay visible
+// next to the revocation, because the provable thing is the sequence.
+// ---------------------------------------------------------------------------
+
+export const consentRecords = pgTable(
+  "consent_records",
+  {
+    id: id(),
+    /** Null for form-first arrivals — someone who found the site without a DM. */
+    prospectId: text("prospect_id"),
+    businessName: text("business_name").notNull(),
+    /**
+     * Captured from the form so we know which practice they meant. NOT passed
+     * to connectGoogleReviewSource and NOT used to create a businesses row:
+     * that call enforces "one real business, one Place ID, ever", so claiming
+     * it here would make the practice's own later signup fail as
+     * business_already_claimed. A free report must not block the sale it earns.
+     */
+    googlePlaceId: text("google_place_id"),
+    phoneE164: text("phone_e164").notNull(),
+    email: text("email"),
+    /** IANA zone for the practice, e.g. "America/New_York". Dialling hours use THIS, never server time. */
+    timezone: text("timezone").notNull().default("America/New_York"),
+
+    channel: text("channel").notNull().default("voice"),
+    /** "pewc" (marketing, written) | "pec" (informational). A $49/mo pitch is pewc. */
+    consentType: text("consent_type").notNull().default("pewc"),
+    /** "web_form" | "dm" | "inbound_call" */
+    source: text("source").notNull(),
+
+    /** The literal words shown. See lib/consent/disclosure.ts for why this is copied, not referenced. */
+    disclosureText: text("disclosure_text").notNull(),
+    disclosureVersion: text("disclosure_version").notNull(),
+    checkboxLabel: text("checkbox_label").notNull(),
+
+    // Web-form provenance
+    formUrl: text("form_url"),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    submittedPayloadJson: text("submitted_payload_json"),
+
+    // DM provenance — a screenshot is the only durable form of an IG thread
+    dmPlatform: text("dm_platform"),
+    dmThreadUrl: text("dm_thread_url"),
+    dmHandle: text("dm_handle"),
+    dmConsentQuote: text("dm_consent_quote"),
+    dmScreenshotUrl: text("dm_screenshot_url"),
+
+    grantedAt: createdAt(),
+    /** Set on revocation. Non-null means this grant no longer authorises anything. */
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    phoneIdx: index("consent_records_phone_idx").on(t.phoneE164, t.channel),
+    prospectIdx: index("consent_records_prospect_idx").on(t.prospectId),
+  }),
+);
+
+/**
+ * The do-not-contact list. Global across channels on purpose: the FCC's
+ * universal-revocation rule took effect 11 Apr 2026, so a "stop" said on a
+ * call also ends the email sequence unless the person narrows it themselves.
+ * Per-channel suppression would be the older, now-wrong behaviour.
+ *
+ * NEVER purged. Purging a suppression re-enables calling someone who said
+ * stop, which is the worst failure this system can have.
+ */
+export const suppressions = pgTable(
+  "suppressions",
+  {
+    id: id(),
+    phoneE164: text("phone_e164"),
+    email: text("email"),
+    scope: text("scope").notNull().default("all"),
+    /** "said_stop_on_call" | "email_unsub" | "dm_no" | "wrong_number" | "manual" */
+    reason: text("reason").notNull(),
+    /** Their words, verbatim. This is the answer to "I said stop and they kept calling". */
+    capturedQuote: text("captured_quote"),
+    source: text("source").notNull(),
+    suppressedAt: createdAt(),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    phoneUnique: uniqueIndex("suppressions_phone_unique").on(t.phoneE164),
+    emailUnique: uniqueIndex("suppressions_email_unique").on(t.email),
+  }),
+);
