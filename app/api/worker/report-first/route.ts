@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, pgClient } from "@/lib/db/client";
 import { prospects, reviewSources, weeklyReports } from "@/lib/db/schema.pg";
-import { connectGoogleReviewSource, findAndDraftProspects, verifyProspectEmails } from "@/lib/db/queries";
+import { connectGoogleReviewSource, findAndDraftProspects, verifyProspectEmails, findEmailForProspect } from "@/lib/db/queries";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { ensureProspectBusiness, newReportToken, DEFAULT_PROSPECT_REVIEWS_LIMIT } from "@/lib/outreach/prospectReport";
 
@@ -68,6 +68,39 @@ export async function GET(req: NextRequest) {
         senderName: process.env.OUTREACH_SENDER_NAME || "Murat Emre Yesilsirt",
       });
       return NextResponse.json({ ok: true, action, city, ...r });
+    }
+
+    if (action === "find-email") {
+      // Looks up a contact email on each prospect's own website (same code
+      // as the admin "Find email" button), a few per call within the budget.
+      const campaign = q.get("campaign");
+      if (!campaign) return NextResponse.json({ error: "campaign required" }, { status: 400 });
+      const started = Date.now();
+      const pending = and(eq(prospects.campaign, campaign), isNull(prospects.contactEmail), isNull(prospects.emailValidationReason), sql`${prospects.website} is not null`);
+      const rows = await db
+        .select({ id: prospects.id, name: prospects.businessName, website: prospects.website })
+        .from(prospects)
+        .where(pending)
+        .orderBy(prospects.createdAt)
+        .limit(Number(q.get("limit")) || 8);
+      const out: Array<{ name: string; email: string | null; source?: string | null; error?: string }> = [];
+      for (const r of rows) {
+        if (Date.now() - started > 45_000) break;
+        try {
+          const f = await findEmailForProspect(r.id);
+          if (f.email) {
+            await db.update(prospects).set({ contactEmail: f.email }).where(eq(prospects.id, r.id));
+          } else {
+            await db.update(prospects).set({ emailValidationReason: "no email found on site" }).where(eq(prospects.id, r.id));
+          }
+          out.push({ name: r.name, email: f.email, source: f.source });
+        } catch (e) {
+          await db.update(prospects).set({ emailValidationReason: "lookup failed" }).where(eq(prospects.id, r.id));
+          out.push({ name: r.name, email: null, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+      const [{ left }] = await db.select({ left: sql<number>`count(*)::int` }).from(prospects).where(pending);
+      return NextResponse.json({ ok: true, action, processed: out.length, remaining: left, out });
     }
 
     if (action === "verify") {
