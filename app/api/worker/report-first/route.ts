@@ -5,6 +5,9 @@ import { prospects, reviewSources, weeklyReports } from "@/lib/db/schema.pg";
 import { connectGoogleReviewSource, findAndDraftProspects, verifyProspectEmails, findEmailForProspect } from "@/lib/db/queries";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 import { ensureProspectBusiness, newReportToken, DEFAULT_PROSPECT_REVIEWS_LIMIT } from "@/lib/outreach/prospectReport";
+import { runAutosend, renderFirstEmail } from "@/lib/outreach/autosend";
+import { sendOutreachEmail } from "@/lib/email/send";
+import { buildOutreachEmailHtml, buildOutreachEmailText } from "@/lib/email/templates/outreachEmail";
 
 // Report-first outreach WORKER. Vercel functions stop at 60 seconds, so
 // the build (one Outscraper fetch + several 45-second analysis rounds per
@@ -145,6 +148,25 @@ export async function GET(req: NextRequest) {
       await pgClient.unsafe(`update reviews set analyzed_at = null, analyzed_with = null where business_id = $1`, [p.reportBusinessId]);
       await db.update(prospects).set({ reportToken: null, reportBuiltAt: null, reportReviewCount: null, reportViewCount: 0, reportFirstViewedAt: null, status: "building" }).where(eq(prospects.id, id));
       return NextResponse.json({ ok: true, action, id, prospect: p.businessName });
+    }
+
+    if (action === "send-test") {
+      // Sends a prospect's first email to an address of OURS (not the
+      // prospect) so the owner can see exactly what goes out. Touches nothing
+      // on the prospect row.
+      const id = q.get("id");
+      const to = q.get("to");
+      if (!id || !to) return NextResponse.json({ error: "id and to required" }, { status: 400 });
+      const [p] = await db.select().from(prospects).where(eq(prospects.id, id)).limit(1);
+      if (!p?.reportToken) return NextResponse.json({ error: "prospect has no built report" }, { status: 400 });
+      const { subject, body } = renderFirstEmail(p);
+      const r = await sendOutreachEmail({ recipientEmail: to, subject: `[TEST] ${subject}`, html: buildOutreachEmailHtml(body), text: buildOutreachEmailText(body) });
+      return NextResponse.json({ ok: true, action, to, subject, ...r, body });
+    }
+
+    if (action === "run-autosend") {
+      const result = await runAutosend({ dryRun: q.get("dry") === "1" });
+      return NextResponse.json({ ok: true, action, ...result });
     }
 
     if (action === "set-status") {
