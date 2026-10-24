@@ -1,3 +1,4 @@
+import { industryWords } from "@/lib/ai/industryWords";
 import Link from "next/link";
 import { THEME_LABELS, ThemeCategory } from "@/config/themes";
 import type { ThemeExcerpt, ThemeExcerptsBySentiment } from "@/lib/db/queries";
@@ -43,6 +44,7 @@ export function ReportBody({
   excerptsByTheme = {},
   allReviewsHref,
   hideChanges = false,
+  industry = "dental",
 }: {
   businessName: string;
   report: ReportRow;
@@ -70,6 +72,8 @@ export function ReportBody({
   // First-ever report (report-first outreach): there is no last report, so
   // the comparison section would only confuse the reader.
   hideChanges?: boolean;
+  /** Drives wording of the disclaimers; see lib/ai/industry.ts. */
+  industry?: string;
 }) {
   const topPositiveThemes: ThemeRef[] = JSON.parse(report.topPositiveThemesJson);
   const topNegativeThemes: ThemeRef[] = JSON.parse(report.topNegativeThemesJson);
@@ -92,7 +96,7 @@ export function ReportBody({
         </p>
         {possiblyTruncated && (
           <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Your practice may have more reviews on Google than we imported — this report reflects the most recent
+            You may have more reviews on Google than we imported — this report reflects the most recent
             {" "}
             {totalReviews}.
           </p>
@@ -158,7 +162,7 @@ export function ReportBody({
 
         <section>
           <h2 className="font-serif text-lg font-semibold text-slate-900">Recommended Actions</h2>
-          <p className="mt-1 text-xs text-slate-400">AI interpretation — operational suggestions only, not medical or clinical advice.</p>
+          <p className="mt-1 text-xs text-slate-400">{industryWords(industry).disclaimer}</p>
           <ol className="mt-3 space-y-3">
             {recommendedActions.map((a, i) => (
               <li key={i} className="flex gap-3">

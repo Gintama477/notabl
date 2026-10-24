@@ -41,12 +41,15 @@
 // opportunities array, so the card claimed there was nothing to flag.
 // Every section was exposed to the same silent under-reporting; an empty
 // topNegativeThemes would have hidden real complaints just as quietly.
+import { industryWords } from "@/lib/ai/industry";
+
 export const GENERATE_NARRATIVE_PROMPT_VERSION = "narrative-v7";
 
 export function buildNarrativePrompt(structuredRollupJson: string, businessName: string): string {
-  return `You are writing a patient-review report for a dental practice
+  const w = industryWords();
+  return `You are writing a ${w.reportKind} for a ${w.business}
 called "${businessName}". You are given pre-computed, verified statistics
-about their patient reviews to date. Do NOT invent any numbers, themes, or
+about their ${w.customer} reviews to date. Do NOT invent any numbers, themes, or
 facts that are not present in this data.
 
 DATA (already computed and verified — treat as ground truth):
@@ -58,14 +61,11 @@ listed in the data. Do not state a specific review quote unless it is included
 verbatim in the data's excerpts.
 
 Tone: plain, factual, useful to a busy small-business owner. No hype, no
-emojis, no "AI" self-references. This is client feedback, not medical advice —
-never suggest changes to clinical/medical treatment decisions, only
-operational/service observations (e.g. front-desk process, scheduling,
-communication).
+emojis, no "AI" self-references. ${w.noAdviceLine}
 
 CRITICAL — NEVER state a date, a date range, or a reporting period
 anywhere in this report, including in "executiveSummary". This report
-always covers the practice's ENTIRE review history; there is no reporting
+always covers the business's ENTIRE review history; there is no reporting
 period, no week, and no date range to describe. Do not write "for the
 period ending...", do not write a date in any format, and do not reference
 a "snapshot." If you want to say what the report covers, say it in terms of
@@ -93,7 +93,7 @@ GOOD example (same number, correctly framed as a total): "Professionalism has
 BAD example (states a date range, which must never appear): "This report
 covers 200 reviews for the period 2026-08-13 to 2026-08-20."
 GOOD example (count only, no dates): "This report covers all 200 reviews
-for the practice."
+for the business."
 
 A theme's "trendDirection" being "new" means it had zero mentions as of the
 previous report — it says NOTHING about whether the theme is positive or
@@ -130,7 +130,7 @@ section. Your job is the wording, not the picking — a section whose
 selection has three categories and whose output has fewer is wrong, even
 if what you wrote is accurate.
 
-"opportunities" are the practice's UNDER-USED strengths: real strengths
+"opportunities" are the business's UNDER-USED strengths: real strengths
 that aren't among the headline ones in "topPositiveThemes". The selection
 has already excluded anything appearing there, so the two lists cannot
 overlap.
@@ -138,11 +138,11 @@ overlap.
 For each, write one or two sentences saying something specific about how
 THIS strength could be put to work, grounded in that theme's actual counts.
 The reader is paying for this — it must be something they could not have
-written themselves about their own practice. Generic marketing advice that
+written themselves about their own business. Generic marketing advice that
 would fit any business is a failure, even if it is technically true.
 Operational suggestions only, same as "recommendedActions": how the
-practice communicates, schedules, or presents itself — never anything
-clinical.
+business communicates, schedules, or presents itself — never anything
+outside its day-to-day operations.
 
 Keep every "summary" field in this report under 300 characters, including
 these. Two tight sentences, not a paragraph.
@@ -152,7 +152,7 @@ reviews overall — consider highlighting this in your marketing."
 GOOD example (specific, tied to the data): "Staff friendliness has 34
 positive mentions and zero negatives — the most consistent strength in the
 data. Worth naming specific team members in appointment reminders, since
-patients already single them out by name."
+${w.customers} already single them out by name."
 
 Respond with ONLY valid JSON matching this shape, no other text:
 {

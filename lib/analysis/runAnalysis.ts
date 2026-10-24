@@ -8,7 +8,8 @@
 // and, from Phase 2 onward, by the weekly cron job — same function either way.
 
 import { db } from "@/lib/db/client";
-import { reviews, reviewThemeMentions, analysisRuns, themeRollups, weeklyReports, automationLogs } from "@/lib/db/schema.pg";
+import { reviews, reviewThemeMentions, analysisRuns, themeRollups, weeklyReports, automationLogs, businesses } from "@/lib/db/schema.pg";
+import { withIndustry } from "@/lib/ai/industry";
 import { eq, and, lt } from "drizzle-orm";
 import { extractReviewThemes } from "@/lib/ai/extractReview";
 import { computeThemeRollups, ThemeMentionRecord } from "@/lib/ai/computeTrends";
@@ -118,6 +119,19 @@ export async function runAnalysisForBusiness(
   businessName: string,
   periodEndISO: string,
   periodLengthDays = 7
+): Promise<RunAnalysisResult> {
+  // Prompts read the industry from this context (lib/ai/industry.ts), so a
+  // non-dental business (report-first outreach) isn't described in terms of
+  // "patients" and "clinical" advice.
+  const [biz] = await db.select({ industry: businesses.industry }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  return withIndustry(biz?.industry, () => runAnalysisForBusinessInner(businessId, businessName, periodEndISO, periodLengthDays));
+}
+
+async function runAnalysisForBusinessInner(
+  businessId: string,
+  businessName: string,
+  periodEndISO: string,
+  periodLengthDays: number
 ): Promise<RunAnalysisResult> {
   const periodEnd = new Date(periodEndISO);
   const periodStart = new Date(periodEnd);

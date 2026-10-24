@@ -6,10 +6,13 @@
 
 import { THEME_CATEGORIES } from "@/config/themes";
 
+import { industryWords } from "@/lib/ai/industry";
+
 export const EXTRACT_REVIEW_PROMPT_VERSION = "extract-v1";
 
 export function buildExtractReviewPrompt(reviewText: string, rating: number): string {
-  return `You are analyzing a single public customer review for a dental practice.
+  const w = industryWords();
+  return `You are analyzing a single public customer review for a ${w.business}.
 
 Review (rating given by customer: ${rating}/5 stars):
 """
