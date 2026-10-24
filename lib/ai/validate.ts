@@ -17,7 +17,11 @@ export const ThemeMentionSchema = z.object({
 
 export const ReviewExtractionSchema = z.object({
   sentiment: z.enum(SENTIMENTS),
-  themes: z.array(ThemeMentionSchema).max(6),
+  // Capped by truncation, not rejection: a long, angry review can touch
+  // seven or eight themes, and rejecting the whole extraction left such a
+  // review permanently un-analyzable (it failed identically every round).
+  // Keep the first six — the model lists them in order of prominence.
+  themes: z.array(ThemeMentionSchema).transform((t) => t.slice(0, 6)),
 });
 
 export type ReviewExtraction = z.infer<typeof ReviewExtractionSchema>;

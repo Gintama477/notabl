@@ -4,6 +4,7 @@ import { db, pgClient } from "@/lib/db/client";
 import { prospects, reviewSources, weeklyReports } from "@/lib/db/schema.pg";
 import { connectGoogleReviewSource, findAndDraftProspects, verifyProspectEmails, findEmailForProspect } from "@/lib/db/queries";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
+import { getAIProvider } from "@/lib/ai/provider";
 import { ensureProspectBusiness, newReportToken, DEFAULT_PROSPECT_REVIEWS_LIMIT } from "@/lib/outreach/prospectReport";
 import { runAutosend, renderFirstEmail } from "@/lib/outreach/autosend";
 import { sendOutreachEmail } from "@/lib/email/send";
@@ -215,6 +216,19 @@ export async function GET(req: NextRequest) {
       // report" comparisons — there is no last report, and the page is
       // read by someone who has never seen one.
       const result = await runAnalysisForBusiness(business.id, business.name, new Date().toISOString(), PROSPECT_PERIOD_DAYS);
+      if (result.reviewsRemaining > 0 && result.reviewsNewlyAnalyzed === 0 && q.get("skipStuck") === "1") {
+        // Caller saw zero progress on consecutive rounds: the remaining
+        // review(s) fail extraction every time. Mark them analyzed-without-
+        // themes so the report can be produced; they still appear verbatim
+        // in the review sample, just not in the theme counts.
+        const provider = getAIProvider();
+        const version = `${provider.name}/${provider.promptVersion}`;
+        const r = await pgClient.unsafe(
+          `update reviews set analyzed_at = now()::text, analyzed_with = $2 where business_id = $1 and (analyzed_at is null or analyzed_with is distinct from $2)`,
+          [business.id, version]
+        );
+        return NextResponse.json({ ok: true, action, done: false, prospect: p.businessName, step: "skipped-stuck-reviews", count: r.count });
+      }
       if (result.reviewsRemaining > 0) {
         return NextResponse.json({ ok: true, action, done: false, prospect: p.businessName, step: "analysis", remaining: result.reviewsRemaining, analyzed: result.reviewsNewlyAnalyzed });
       }
