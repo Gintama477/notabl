@@ -23,6 +23,13 @@ import { accounts, businesses, prospects, reviews, weeklyReports } from "@/lib/d
 import { connectGoogleReviewSource, generateUniqueBusinessSlug } from "@/lib/db/queries";
 import { runAnalysisForBusiness } from "@/lib/analysis/runAnalysis";
 
+export class DeadlineReached extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DeadlineReached";
+  }
+}
+
 export const PROSPECT_ACCOUNT_ROLE = "prospect";
 export const PROSPECT_ACCOUNT_DOMAIN = "prospects.trynotabl.invalid";
 /** Newest-first cap on reviews imported per prospect. Outscraper bills per review; Claude per extraction. */
@@ -84,7 +91,7 @@ export function newReportToken(): string {
  */
 export async function buildProspectReport(
   prospectId: string,
-  opts: { reviewsLimit?: number; maxAnalysisRounds?: number; log?: (line: string) => void } = {}
+  opts: { reviewsLimit?: number; maxAnalysisRounds?: number; deadlineMs?: number; log?: (line: string) => void } = {}
 ) {
   const log = opts.log ?? (() => {});
   const reviewsLimit = opts.reviewsLimit ?? DEFAULT_PROSPECT_REVIEWS_LIMIT;
@@ -112,6 +119,10 @@ export async function buildProspectReport(
   const periodEnd = new Date().toISOString();
   let remaining = Infinity;
   for (let round = 1; round <= maxRounds && remaining > 0; round++) {
+    // Resumable: everything above is idempotent (import has a cooldown,
+    // analysis skips already-analyzed reviews), so a caller with a wall-
+    // clock limit can stop here and pick up on the next invocation.
+    if (opts.deadlineMs && Date.now() > opts.deadlineMs) throw new DeadlineReached(`deadline reached before round ${round} (${remaining} remaining)`);
     const result = await runAnalysisForBusiness(business.id, business.name, periodEnd, 90);
     remaining = result.reviewsRemaining ?? 0;
     log(`analysis round ${round}: analyzed ${result.reviewsNewlyAnalyzed}, remaining ${remaining}`);

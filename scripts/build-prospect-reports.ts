@@ -16,7 +16,7 @@ import { appendFileSync } from "node:fs";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../lib/db/client";
 import { prospects } from "../lib/db/schema.pg";
-import { buildProspectReport, DEFAULT_PROSPECT_REVIEWS_LIMIT } from "../lib/outreach/prospectReport";
+import { buildProspectReport, DeadlineReached, DEFAULT_PROSPECT_REVIEWS_LIMIT } from "../lib/outreach/prospectReport";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -25,6 +25,8 @@ function arg(name: string): string | undefined {
 const dryRun = process.argv.includes("--dry-run");
 const reviewsLimit = Number(arg("reviews")) || DEFAULT_PROSPECT_REVIEWS_LIMIT;
 const logFile = arg("log") || "scripts/build-prospect-reports.log";
+const maxSeconds = Number(arg("max-seconds")) || 0;
+const deadlineMs = maxSeconds ? Date.now() + maxSeconds * 1000 : 0;
 const log = (line: string) => {
   const stamped = `${new Date().toISOString()} ${line}`;
   console.log(stamped);
@@ -58,13 +60,21 @@ async function main() {
       log(`skip ${p.businessName}: status ${p.status}`);
       continue;
     }
+    if (deadlineMs && Date.now() > deadlineMs - 20_000) {
+      log("time budget used up; re-run to continue");
+      break;
+    }
     log(`--- ${p.businessName} (${p.city}) ${p.googleReviewCount ?? "?"} reviews, ${p.contactEmail ?? "no email"}`);
     if (dryRun) continue;
     try {
-      const r = await buildProspectReport(p.id, { reviewsLimit, log: (l) => log(`    ${l}`) });
+      const r = await buildProspectReport(p.id, { reviewsLimit, deadlineMs: deadlineMs || undefined, log: (l) => log(`    ${l}`) });
       log(`    READY token=${r.token} reviews=${r.reviewCount}`);
       ok++;
     } catch (e) {
+      if (e instanceof DeadlineReached) {
+        log(`    paused: ${e.message}`);
+        break;
+      }
       failed++;
       log(`    FAILED: ${e instanceof Error ? e.message : String(e)}`);
     }
