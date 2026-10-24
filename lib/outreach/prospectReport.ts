@@ -188,7 +188,9 @@ export async function getReadyProspects(limit: number) {
     .select()
     .from(prospects)
     .where(and(eq(prospects.status, "ready"), isNull(prospects.sentAt)))
-    .orderBy(prospects.createdAt)
+    // Random order so each day's batch mixes campaigns (dental + auto)
+    // instead of exhausting one list before the other starts.
+    .orderBy(sql`random()`)
     .limit(limit);
 }
 

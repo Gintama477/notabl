@@ -15,7 +15,10 @@ import {
 } from "@/lib/email/templates/reportFirstEmail";
 import { getReadyProspects, getFollowupDueProspects, countSendsLast24h, prospectReportUrl } from "@/lib/outreach/prospectReport";
 
-export const DAILY_CAP = Number(process.env.OUTREACH_DAILY_SEND_CAP) || 15;
+// Hard ceiling of 15/day for report-first sends regardless of the shared
+// OUTREACH_DAILY_SEND_CAP (which is set higher for the manual queue): the
+// 24 Oct plan is 40 businesses over ~3 weekdays, not a blast.
+export const DAILY_CAP = Math.min(Number(process.env.OUTREACH_DAILY_SEND_CAP) || 15, 15);
 export const FOLLOWUP_AFTER_DAYS = Number(process.env.OUTREACH_FOLLOWUP_AFTER_DAYS) || 4;
 export const SENDER_NAME = process.env.OUTREACH_SENDER_NAME || "Murat Emre Yesilsirt";
 
